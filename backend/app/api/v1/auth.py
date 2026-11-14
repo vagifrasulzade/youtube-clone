@@ -115,10 +115,13 @@ def login(
 @router.post(
     "/refresh",
     summary="Rotate the refresh cookie and get a new access token",
-    dependencies=[Depends(rate_limit.limit_by_ip("refresh", limit=30, window_seconds=60))],
+    # Origin check first: cross-site requests must not consume the victim's rate limit.
+    dependencies=[
+        Depends(_check_origin),
+        Depends(rate_limit.limit_by_ip("refresh", limit=30, window_seconds=60)),
+    ],
 )
 def refresh(request: Request, response: Response, db: DbSession) -> TokenResponse:
-    _check_origin(request)
     raw = _refresh_cookie(request)
     if not raw:
         raise UnauthorizedError("Not signed in", code="invalid_refresh")
@@ -128,9 +131,13 @@ def refresh(request: Request, response: Response, db: DbSession) -> TokenRespons
     return _token_response(session)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="End this session")
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="End this session",
+    dependencies=[Depends(_check_origin)],
+)
 def logout(request: Request, db: DbSession) -> Response:
-    _check_origin(request)
     auth_service.logout(db, _refresh_cookie(request))
     db.commit()
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -156,7 +163,10 @@ def change_password(
     response: Response,
     user: CurrentUser,
     db: DbSession,
+    redis: RedisClient,
 ) -> TokenResponse:
+    # Per account too: a stolen access token must not allow guessing the current password.
+    rate_limit.hit(redis, f"change-password:user:{user.id}", limit=5, window_seconds=900)
     auth_service.change_password(
         db, user, current_password=body.current_password, new_password=body.new_password
     )

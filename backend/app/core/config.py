@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # A refresh token presented again within this window after rotation is treated as a
     # benign race (two tabs refreshing at once), not as token theft.
     refresh_reuse_grace_seconds: int = Field(default=10, ge=0)
+    # Absolute lifetime of one login (token family), however often it is refreshed.
+    refresh_family_max_age_days: int = Field(default=90, ge=1)
     refresh_cookie_name: str = "yt_refresh"
     # True when served over HTTPS. Browsers drop Secure cookies on plain-HTTP origins.
     cookie_secure: bool = False
@@ -94,6 +96,8 @@ class Settings(BaseSettings):
                 )
         if self.jwt_secret.get_secret_value() == self.media_token_secret.get_secret_value():
             raise ValueError("JWT_SECRET and MEDIA_TOKEN_SECRET must differ")
+        if not self.rate_limit_enabled:
+            raise ValueError("RATE_LIMIT_ENABLED cannot be disabled in production")
         return self
 
 

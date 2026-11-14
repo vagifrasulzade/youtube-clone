@@ -21,7 +21,7 @@
 | Login | Generic `invalid_credentials` error. When the user does not exist, a dummy hash is still verified, so timing does not reveal accounts |
 | Access token | JWT HS256 (PyJWT), 15 min, claims `sub`, `typ=access`, `iat`, `exp`, `jti`, `iss`. The algorithm is pinned on decode |
 | Per-request user load | Every authenticated request loads the user from the DB (one PK lookup). **Role and ban status come from the DB, not the token**, so a role change or ban applies immediately (E3) |
-| Refresh token | 256-bit random opaque value, stored as SHA-256 only, 30 days, **rotated on every use**. Presenting a revoked token revokes the whole family (E2) |
+| Refresh token | 256-bit random opaque value, stored as SHA-256 only, 30 days, **rotated on every use**, and a login (family) lives at most 90 days. Presenting an already-rotated token revokes the whole family (E2). Exception: within 10 s of its rotation it gets `401 refresh_superseded` without revocation, so two tabs refreshing at once do not log the user out. Revocation locks the family's rows before updating them, so a token minted by a concurrent rotation is revoked too |
 | Refresh cookie | `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, and `Secure` when served over HTTPS (`COOKIE_SECURE`). The cookie endpoints also check `Origin` |
 | Frontend storage | Access token in memory only (never in `localStorage`). Silent refresh on page load |
 | Media token | A separate secret, `typ=media`, scoped to one video, 4 h. It identifies the viewer but grants nothing on its own (see § 4) |
@@ -105,7 +105,7 @@ Implementation: a Redis fixed-window counter (`INCR` + `EXPIRE`) as a FastAPI de
 | `GET /search`, `/search/suggestions` | 60/min per IP |
 | `POST /videos/{id}/views` | 120/min per IP |
 
-The client IP comes from `X-Forwarded-For` as set by nginx. The API trusts proxy headers only because it is reachable solely through nginx on the internal Docker network.
+The client IP comes from `X-Forwarded-For`, honoured **only** from the proxy address in `FORWARDED_ALLOW_IPS` (nginx's fixed container address). nginx overwrites the header with `$remote_addr` instead of appending. Trusting every peer (`*`) would let any client choose its own IP and get a fresh rate-limit bucket per request. On cookie endpoints the Origin check runs before the limiter, so rejected cross-site requests do not consume the victim's quota. Change-password is also limited per account (5 per 15 min). Production refuses `RATE_LIMIT_ENABLED=false`.
 
 ## 8. HTTP and infrastructure hardening
 
@@ -121,4 +121,6 @@ The client IP comes from `X-Forwarded-For` as set by nginx. The API trusts proxy
 
 - The default deployment is **plain HTTP** (a test machine without a domain). Tokens would then cross the network unencrypted. `deployment.md` will describe enabling TLS (certificate paths in `.env` → nginx 443 + HSTS + `COOKIE_SECURE=true`).
 - Registration reveals whether an email is already taken (a UX trade-off, the same as YouTube). Login does not.
+- The per-account login limit (5/min) means anyone who knows an email can delay that account's logins by a minute at a time. This is accepted in exchange for stopping distributed password guessing.
+- Access JWTs stay valid for up to 15 minutes after logout or a password change (stateless by design). Bans, however, apply immediately because the user is loaded per request.
 - A media URL copied while valid only works for a viewer who still passes `can_view`, so for a private video it does not work for anyone without a grant.

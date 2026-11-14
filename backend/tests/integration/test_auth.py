@@ -381,3 +381,55 @@ def test_auth_fails_closed_when_rate_limiter_is_down(client: TestClient) -> None
     response = client.post(LOGIN, json={"email": "x@example.com", "password": "whatever"})
 
     assert response.status_code == 503
+
+
+# --- security review regressions --------------------------------------------------
+
+
+def test_change_password_applies_the_registration_policy(client: TestClient) -> None:
+    """Review L1: the new password may not equal the email or handle."""
+    body = register(client, email="henry@example.com", handle="henry_h")
+
+    response = client.post(
+        CHANGE_PASSWORD,
+        headers=bearer(body["access_token"]),
+        json={"current_password": DEFAULT_PASSWORD, "new_password": "henry@example.com"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "weak_password"
+
+
+def test_change_password_is_rate_limited_per_account(client: TestClient) -> None:
+    """Review L2"""
+    body = register(client)
+    attempt = {"current_password": "wrong-guess", "new_password": "brand-new-password"}
+
+    statuses = [
+        client.post(CHANGE_PASSWORD, headers=bearer(body["access_token"]), json=attempt).status_code
+        for _ in range(6)
+    ]
+
+    assert statuses == [400] * 5 + [429]
+
+
+def test_cross_site_refresh_attempts_do_not_consume_the_rate_limit(client: TestClient) -> None:
+    """Review L3: rejected cross-origin requests must not lock the victim out."""
+    register(client)
+    for _ in range(35):
+        assert client.post(REFRESH, headers={"Origin": "https://evil.example"}).status_code == 403
+
+    assert client.post(REFRESH).status_code == 200
+
+
+def test_a_login_cannot_be_refreshed_forever(client: TestClient, db_session: Session) -> None:
+    """Absolute session lifetime, however often the token is rotated."""
+    register(client)
+    cookie = client.cookies[COOKIE]
+    db_session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == hash_token(cookie))
+        .values(created_at=datetime.now(UTC) - timedelta(days=91))
+    )
+
+    assert refresh_with(client, cookie).status_code == 401

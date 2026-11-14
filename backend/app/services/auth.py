@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -127,20 +127,28 @@ def issue_session(
     )
 
 
-def revoke_family(db: Session, family_id: uuid.UUID) -> None:
+def _revoke_where(db: Session, condition: ColumnElement[bool]) -> None:
+    """Revoke every live token matching `condition`.
+
+    Two statements on purpose (security review M1): the first waits for any in-flight
+    rotation holding a row lock in this set; the second runs with a fresh READ COMMITTED
+    snapshot, so it also sees (and revokes) a token that rotation has just inserted.
+    A single UPDATE would only re-check the rows in its original snapshot.
+    """
+    db.execute(select(RefreshToken.id).where(condition).with_for_update())
     db.execute(
         update(RefreshToken)
-        .where(RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None))
+        .where(condition, RefreshToken.revoked_at.is_(None))
         .values(revoked_at=_now())
     )
+
+
+def revoke_family(db: Session, family_id: uuid.UUID) -> None:
+    _revoke_where(db, RefreshToken.family_id == family_id)
 
 
 def revoke_all_sessions(db: Session, user_id: uuid.UUID) -> None:
-    db.execute(
-        update(RefreshToken)
-        .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=_now())
-    )
+    _revoke_where(db, RefreshToken.user_id == user_id)
 
 
 def rotate_session(db: Session, raw_token: str, *, user_agent: str | None) -> IssuedSession:
@@ -149,6 +157,7 @@ def rotate_session(db: Session, raw_token: str, *, user_agent: str | None) -> Is
         select(RefreshToken)
         .where(RefreshToken.token_hash == hash_token(raw_token))
         .with_for_update()  # serializes concurrent refreshes of the same token
+        .execution_options(populate_existing=True)  # always the latest committed values
     )
     if row is None:
         raise invalid
@@ -168,6 +177,17 @@ def rotate_session(db: Session, raw_token: str, *, user_agent: str | None) -> Is
         db.commit()
         raise invalid
     if row.expires_at <= now:
+        raise invalid
+
+    # Absolute session lifetime: rotation slides each token's expiry, but a login (family)
+    # may not live forever. Measured from the family's first token.
+    family_started = db.scalar(
+        select(func.min(RefreshToken.created_at)).where(RefreshToken.family_id == row.family_id)
+    )
+    max_age = timedelta(days=get_settings().refresh_family_max_age_days)
+    if family_started is not None and now - family_started > max_age:
+        revoke_family(db, row.family_id)
+        db.commit()
         raise invalid
 
     user = db.get(User, row.user_id)
@@ -197,5 +217,11 @@ def change_password(db: Session, user: User, *, current_password: str, new_passw
         raise BadRequestError("Current password is incorrect", code="wrong_password")
     if verify_password(user.password_hash, new_password):
         raise BadRequestError("New password must differ from the current one", code="same_password")
+    # Same policy as registration (security review L1).
+    forbidden = {user.email, user.email.split("@")[0], user.channel.handle}
+    if new_password.lower() in forbidden:
+        raise BadRequestError(
+            "Password must not be the same as your email or handle", code="weak_password"
+        )
     user.password_hash = hash_password(new_password)
     revoke_all_sessions(db, user.id)
