@@ -14,11 +14,14 @@ def test_live_returns_ok(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_ready_reports_database_and_redis_ok(client: TestClient) -> None:
+def test_ready_reports_database_redis_and_storage_ok(client: TestClient) -> None:
     response = client.get("/api/v1/health/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "checks": {"database": "ok", "redis": "ok"}}
+    assert response.json() == {
+        "status": "ok",
+        "checks": {"database": "ok", "redis": "ok", "storage": "ok"},
+    }
 
 
 def test_ready_returns_503_when_redis_is_unreachable(client: TestClient) -> None:
@@ -30,7 +33,7 @@ def test_ready_returns_503_when_redis_is_unreachable(client: TestClient) -> None
     assert response.status_code == 503
     assert response.json() == {
         "status": "degraded",
-        "checks": {"database": "ok", "redis": "error"},
+        "checks": {"database": "ok", "redis": "error", "storage": "ok"},
     }
 
 

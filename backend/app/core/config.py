@@ -57,6 +57,27 @@ class Settings(BaseSettings):
 
     rate_limit_enabled: bool = True
 
+    # --- object storage (MinIO, S3 API) ---
+    # Internal endpoint used by the API and worker (never shown to clients).
+    s3_endpoint_url: str = "http://127.0.0.1:9000"
+    s3_region: str = "us-east-1"
+    s3_access_key: SecretStr = SecretStr("")
+    s3_secret_key: SecretStr = SecretStr("")
+    uploads_bucket: str = "yt-uploads"
+    media_bucket: str = "yt-media"
+    # Where the browser POSTs uploads. Production: same-origin path proxied by nginx.
+    # The POST policy signature does not cover the URL, so this can differ from the
+    # internal endpoint.
+    s3_public_upload_url: str = "/storage/upload"
+
+    # --- upload limits (docs/video-storage.md § 6) ---
+    max_upload_bytes: int = Field(default=2 * 1024**3, ge=1024)
+    max_video_duration_seconds: int = Field(default=2 * 3600, ge=1)
+    upload_policy_ttl_seconds: int = Field(default=2 * 3600, ge=60)
+    max_avatar_bytes: int = Field(default=2 * 1024**2, ge=1024)
+    max_banner_bytes: int = Field(default=6 * 1024**2, ge=1024)
+    max_thumbnail_bytes: int = Field(default=2 * 1024**2, ge=1024)
+
     @model_validator(mode="after")
     def _refuse_insecure_production(self) -> Self:
         if self.env != "production":

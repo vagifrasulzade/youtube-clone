@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import DbSession, RedisClient
+from app.storage import s3
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/health", tags=["health"])
@@ -52,6 +53,8 @@ def ready(db: DbSession, redis: RedisClient, response: Response) -> ReadinessRes
     except RedisError:
         logger.warning("Readiness: redis check failed", exc_info=True)
         checks["redis"] = "error"
+
+    checks["storage"] = "ok" if s3.is_reachable() else "error"
 
     healthy = all(result == "ok" for result in checks.values())
     if not healthy:
