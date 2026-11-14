@@ -99,7 +99,7 @@ Per-stage loop: **analyze → small tasks → implement → run tests (real outp
 | The local venv is Python 3.14 while the containers use 3.13 | Tests run inside Docker for parity; the venv is for the IDE only |
 | Frontend: "Yotube" typo and Vite template assets | Replaced on Day 7 |
 | Docker Desktop daemon not running; ffmpeg not installed locally | Start Docker Desktop. ffmpeg is needed only inside containers |
-| MinIO stopped publishing community builds/images after 2025 | Pin a known-good `minio/minio` release tag. The S3 API keeps us swappable (e.g. to another S3-compatible store) through config only |
+| MinIO stopped publishing community builds/images after 2025 (**confirmed 2026-11-14**: `minio/minio` on Docker Hub and quay.io returns "denied") | Use `cgr.dev/chainguard/minio` (MinIO RELEASE.2026-11-12 built from upstream source, patched, non-root) **pinned by digest**, overridable with `MINIO_IMAGE`. The S3 API keeps us swappable through config only |
 
 ## 6. Decisions (defaults accepted at approval, 2026-11-14; #5 still open)
 
