@@ -9,8 +9,9 @@ from app.api.deps import CurrentUser, DbSession, OptionalUser
 from app.core import rate_limit
 from app.models import Video
 from app.schemas.channel import ChannelPageOut, SubscriptionOut
+from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.user import ChannelSummary
-from app.services import access, channels, subscriptions
+from app.services import access, channels, feeds, subscriptions
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -61,3 +62,19 @@ def subscribe(handle: str, user: CurrentUser, db: DbSession) -> SubscriptionOut:
 def unsubscribe(handle: str, user: CurrentUser, db: DbSession) -> SubscriptionOut:
     channel = subscriptions.unsubscribe(db, user, handle)
     return SubscriptionOut(subscribed=False, subscriber_count=channel.subscriber_count)
+
+
+@router.get("/{handle}/videos", summary="A channel's public videos")
+def channel_videos(
+    handle: str,
+    viewer: OptionalUser,
+    db: DbSession,
+    sort: feeds.ChannelSort = "latest",
+    cursor: str | None = None,
+    limit: int = 30,
+) -> CursorPage[VideoCard]:
+    channel = subscriptions.get_channel_by_handle(db, handle)
+    items, next_cursor = feeds.channel_videos(db, channel.id, sort, cursor, limit)
+    return CursorPage(
+        items=[VideoCard.from_model(v, viewer) for v in items], next_cursor=next_cursor
+    )

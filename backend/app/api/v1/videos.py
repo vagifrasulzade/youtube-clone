@@ -7,6 +7,7 @@ from redis.exceptions import RedisError
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
+from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.video import (
     ReactionOut,
     ReactionRequest,
@@ -18,7 +19,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, reactions, uploads
+from app.services import access, feeds, reactions, uploads
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -92,6 +93,22 @@ def update_video(
     db.commit()
     db.refresh(video)
     return VideoOwnerOut.from_model(video)
+
+
+@router.get("", summary="Home feed (public videos, newest first)")
+def home_feed(
+    viewer: OptionalUser, db: DbSession, cursor: str | None = None, limit: int = 24
+) -> CursorPage[VideoCard]:
+    items, next_cursor = feeds.home_feed(db, cursor, limit)
+    return CursorPage(
+        items=[VideoCard.from_model(v, viewer) for v in items], next_cursor=next_cursor
+    )
+
+
+@router.get("/{video_id}/related", summary="Related videos for the watch page")
+def related(video_id: str, viewer: OptionalUser, db: DbSession, limit: int = 20) -> list[VideoCard]:
+    video = access.get_viewable_video_or_404(db, video_id, viewer)
+    return [VideoCard.from_model(v, viewer) for v in feeds.related_videos(db, video, limit)]
 
 
 @router.get("/{video_id}", summary="Watch page details (404 if you may not see it)")
