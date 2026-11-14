@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     max_banner_bytes: int = Field(default=6 * 1024**2, ge=1024)
     max_thumbnail_bytes: int = Field(default=2 * 1024**2, ge=1024)
 
+    # --- media delivery (docs/video-storage.md § 5) ---
+    # accel: FastAPI authorizes, nginx streams from MinIO (X-Accel-Redirect) - production.
+    # proxy: FastAPI streams from MinIO itself (dev/tests without nginx). Same authz path.
+    media_delivery: Literal["accel", "proxy"] = "proxy"
+    media_token_ttl_seconds: int = Field(default=4 * 3600, ge=60)
+    internal_presign_ttl_seconds: int = Field(default=60, ge=5)
+
     @model_validator(mode="after")
     def _refuse_insecure_production(self) -> Self:
         if self.env != "production":
