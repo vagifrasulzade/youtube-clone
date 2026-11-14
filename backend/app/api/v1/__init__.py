@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
     auth,
     channels,
     health,
@@ -26,3 +27,4 @@ api_router.include_router(playlists.router)
 api_router.include_router(studio.router)
 api_router.include_router(search.router)
 api_router.include_router(moderation.router)
+api_router.include_router(admin.router)
