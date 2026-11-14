@@ -9,6 +9,7 @@ from redis.exceptions import RedisError
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
+from app.schemas.moderation import ReportCreate, ReportOut
 from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.video import (
     GrantOut,
@@ -23,7 +24,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, feeds, grants, reactions, uploads, views
+from app.services import access, feeds, grants, moderation, reactions, uploads, views
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -212,3 +213,17 @@ def remove_permission(
 ) -> Response:
     grants.revoke(db, user, video_id, user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{video_id}/reports",
+    status_code=status.HTTP_201_CREATED,
+    summary="Report a video (one open report per user and video)",
+)
+def report_video(
+    video_id: str, body: ReportCreate, user: CurrentUser, db: DbSession, redis: RedisClient
+) -> ReportOut:
+    rate_limit.hit(redis, f"report:user:{user.id}", limit=20, window_seconds=3600)
+    return ReportOut.from_model(
+        moderation.create_report(db, user, video_id, body.reason, body.details)
+    )

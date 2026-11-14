@@ -2,7 +2,18 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import auth, channels, health, me, media, playlists, search, studio, videos
+from app.api.v1 import (
+    auth,
+    channels,
+    health,
+    me,
+    media,
+    moderation,
+    playlists,
+    search,
+    studio,
+    videos,
+)
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -14,3 +25,4 @@ api_router.include_router(me.router)
 api_router.include_router(playlists.router)
 api_router.include_router(studio.router)
 api_router.include_router(search.router)
+api_router.include_router(moderation.router)
