@@ -6,12 +6,15 @@ from fastapi import APIRouter, Depends, UploadFile
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser
+from app.api.v1.playlists import playlist_cards
 from app.core import rate_limit
 from app.models import Video
 from app.schemas.channel import ChannelPageOut, SubscriptionOut
 from app.schemas.pages import CursorPage, VideoCard
+from app.schemas.playlist import PlaylistCard
 from app.schemas.user import ChannelSummary
 from app.services import access, channels, feeds, subscriptions
+from app.services import playlists as playlist_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -78,3 +81,9 @@ def channel_videos(
     return CursorPage(
         items=[VideoCard.from_model(v, viewer) for v in items], next_cursor=next_cursor
     )
+
+
+@router.get("/{handle}/playlists", summary="A channel's playlists (public ones for visitors)")
+def channel_playlists(handle: str, viewer: OptionalUser, db: DbSession) -> list[PlaylistCard]:
+    channel = subscriptions.get_channel_by_handle(db, handle)
+    return playlist_cards(db, playlist_service.channel_playlists(db, channel, viewer), viewer)
