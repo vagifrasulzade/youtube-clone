@@ -1,0 +1,25 @@
+# Development overrides: publish infrastructure ports on localhost so the API and
+# tests can run from the host venv.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis minio
+# Host ports are configurable because 5432/8000 are often taken by local installs.
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${DEV_POSTGRES_PORT:-5433}:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:${DEV_REDIS_PORT:-6380}:6379"
+
+  minio:
+    ports:
+      - "127.0.0.1:${DEV_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${DEV_MINIO_CONSOLE_PORT:-9001}:9001"
+
+  api:
+    environment:
+      ENV: development
+      LOG_JSON: "false"
+    ports:
+      - "127.0.0.1:${DEV_API_PORT:-8080}:8000"

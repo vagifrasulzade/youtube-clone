@@ -1,0 +1,112 @@
+# Production-style stack. Only the API port is reachable from outside the Docker
+# network for now; nginx becomes the single public entrypoint in stage 6.
+# Values come from .env (deploy.sh generates it; see .env.example).
+
+name: youtube-clone
+
+x-backend-env: &backend-env
+  ENV: ${APP_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-youtube}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-youtube}
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-youtube}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-youtube}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Ephemeral by design (queue, rate-limit counters, dedupe keys): no persistence.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    # Upstream MinIO no longer publishes community images (Docker Hub/quay return
+    # "denied"). This is MinIO built from upstream source by Chainguard (patched,
+    # minimal, runs as uid 65532), pinned by digest: RELEASE.2026-11-12T01-15-23Z.
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio@sha256:0f9fda72fbc6bd3560ea903aec2ceefa20f6ba82628d67656f37fb370c39ae9c}
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # No curl/wget/grep in the image: plain HTTP request via bash /dev/tcp and a
+      # bash pattern match on the status line ($$ escapes compose interpolation).
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          read -r status_line <&3 && [[ "$$status_line" == *" 200 "* ]]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: ./backend
+      target: runtime
+    image: youtube-clone-backend:latest
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: youtube-clone-backend:latest
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Test suite in a clean container against the same postgres/redis:
+  #   docker compose --profile test run --rm backend-tests   (or scripts/test.sh)
+  backend-tests:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      target: test
+    image: youtube-clone-backend-tests:latest
+    environment:
+      <<: *backend-env
+      ENV: test
+      LOG_JSON: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  minio-data:
