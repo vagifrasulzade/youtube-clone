@@ -6,7 +6,7 @@ from fastapi import APIRouter, Response, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.schemas.pages import ChannelBrief, CursorPage, VideoCard
-from app.services import feeds, subscriptions, views
+from app.services import feeds, grants, subscriptions, views
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -38,3 +38,8 @@ def clear_watch_history(user: CurrentUser, db: DbSession) -> Response:
 @router.get("/liked", summary="Videos I liked")
 def liked(user: CurrentUser, db: DbSession, limit: int = 50) -> list[VideoCard]:
     return [VideoCard.from_model(v, user) for v in views.liked_videos(db, user, limit)]
+
+
+@router.get("/shared", summary="Private videos shared with me")
+def shared(user: CurrentUser, db: DbSession, limit: int = 50) -> list[VideoCard]:
+    return [VideoCard.from_model(v, user) for v in grants.shared_with_me(db, user, limit)]

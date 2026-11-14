@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
 from redis.exceptions import RedisError
 
@@ -9,6 +11,8 @@ from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
 from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.video import (
+    GrantOut,
+    GrantRequest,
     ReactionOut,
     ReactionRequest,
     UploadCreatedOut,
@@ -19,7 +23,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, feeds, reactions, uploads, views
+from app.services import access, feeds, grants, reactions, uploads, views
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -176,3 +180,35 @@ def record_view(
 ) -> dict[str, bool]:
     counted = views.record_view(db, redis, video_id, viewer, rate_limit.client_ip(request))
     return {"counted": counted}
+
+
+@router.get("/{video_id}/permissions", summary="Who may watch this private video (owner)")
+def list_permissions(video_id: str, user: CurrentUser, db: DbSession) -> list[GrantOut]:
+    return [
+        GrantOut(user_id=p.user_id, handle=c.handle, name=c.name, granted_at=p.created_at)
+        for p, c in grants.list_grants(db, user, video_id)
+    ]
+
+
+@router.post(
+    "/{video_id}/permissions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Allow a user (by handle) to watch this private video (owner)",
+)
+def add_permission(
+    video_id: str, body: GrantRequest, user: CurrentUser, db: DbSession
+) -> dict[str, str]:
+    grantee = grants.grant(db, user, video_id, body.handle)
+    return {"handle": grantee.handle}
+
+
+@router.delete(
+    "/{video_id}/permissions/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoke access (effective on the next request)",
+)
+def remove_permission(
+    video_id: str, user_id: uuid.UUID, user: CurrentUser, db: DbSession
+) -> Response:
+    grants.revoke(db, user, video_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
