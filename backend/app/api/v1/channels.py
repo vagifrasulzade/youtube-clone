@@ -9,7 +9,7 @@ from app.api.deps import CurrentUser, DbSession, OptionalUser
 from app.api.v1.playlists import playlist_cards
 from app.core import rate_limit
 from app.models import Video
-from app.schemas.channel import ChannelPageOut, SubscriptionOut
+from app.schemas.channel import ChannelPageOut, ChannelUpdate, SubscriptionOut
 from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.playlist import PlaylistCard
 from app.schemas.user import ChannelSummary
@@ -37,6 +37,16 @@ def upload_avatar(file: UploadFile, user: CurrentUser, db: DbSession) -> Channel
 )
 def upload_banner(file: UploadFile, user: CurrentUser, db: DbSession) -> ChannelSummary:
     return ChannelSummary.from_model(channels.set_channel_image(db, user, "banner", file.file))
+
+
+@router.patch("/me", summary="Edit my channel name/description")
+def update_my_channel(body: ChannelUpdate, user: CurrentUser, db: DbSession) -> ChannelPageOut:
+    channel = user.channel
+    for field, value in body.model_dump(exclude_unset=True, exclude_none=True).items():
+        setattr(channel, field, value)
+    db.commit()
+    db.refresh(channel)
+    return get_channel(channel.handle, user, db)
 
 
 @router.get("/{handle}", summary="Channel page header")

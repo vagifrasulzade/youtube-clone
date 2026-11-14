@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models import Channel
+from app.schemas.common import MultiLineText, RequestModel, SingleLineText
 from app.services.media_urls import channel_avatar_url, channel_banner_url
 
 
@@ -46,3 +48,8 @@ class ChannelPageOut(BaseModel):
 class SubscriptionOut(BaseModel):
     subscribed: bool
     subscriber_count: int
+
+
+class ChannelUpdate(RequestModel):
+    name: Annotated[SingleLineText, Field(min_length=1, max_length=50)] | None = None
+    description: Annotated[MultiLineText, Field(max_length=1000)] | None = None
