@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+venv/
+.venv/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- Secrets & local config (examples are committed) ---
+.env
+.env.*
+!.env.example
+backend/.env
+!backend/.env.example
+
+# --- Editors / OS ---
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Claude Code: personal (non-shared) settings ---
+.claude/settings.local.json
