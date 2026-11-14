@@ -113,8 +113,8 @@ These acceptance criteria are our own contract. Each one maps to at least one au
 | `migrate` | same image, one-shot `alembic upgrade head` | schema migrations before the api starts | — |
 | `postgres` | postgres:17-alpine | system of record | internal |
 | `redis` | redis:7-alpine | Celery broker, rate-limit counters, view dedupe, processing progress | internal |
-| `minio` | minio/minio (pinned release) | object storage | internal |
-| `minio-init` | minio/mc, one-shot | buckets, lifecycle rule, least-privilege app user | — |
+| `minio` | `cgr.dev/chainguard/minio` pinned by digest (MinIO built from upstream source; upstream stopped publishing community images) | object storage | internal |
+| `minio-init` | `cgr.dev/chainguard/minio-client`, one-shot | buckets, lifecycle rule, least-privilege app user | — |
 
 The containers share one backend image, so the api and worker always run the same models and code.
 

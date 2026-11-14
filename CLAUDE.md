@@ -17,7 +17,7 @@ Design (source of truth; update it when the implementation deviates):
 Run from the repo root unless noted. On Windows the venv interpreter is `backend/venv/Scripts/python`; on Linux it is `backend/venv/bin/python`.
 
 ```bash
-# dev infrastructure (postgres :5432, redis :6379, minio :9000/:9001 on localhost)
+# dev infrastructure on localhost: postgres :5433, redis :6380, minio :9000/:9001 (ports set in .env)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis minio
 
 # backend (cwd: backend/)
