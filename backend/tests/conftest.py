@@ -35,6 +35,13 @@ from app.db.session import get_db
 from app.main import app
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+# Fast Argon2 parameters for tests only (production uses the RFC 9106 profile).
+# Set before the first hash: the hasher is created lazily and cached.
+_settings = get_settings()
+_settings.argon2_time_cost = 1
+_settings.argon2_memory_cost_kib = 1024
+_settings.argon2_parallelism = 1
 _DB_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 

@@ -45,7 +45,14 @@ class User(TimestampMixin, Base):
     last_login_at: Mapped[datetime | None]
 
     role: Mapped[Role] = relationship(lazy="joined")
-    channel: Mapped[Channel] = relationship(back_populates="owner", uselist=False)
+    # passive_deletes: let PostgreSQL's ON DELETE CASCADE remove the channel instead of the
+    # ORM trying to NULL channels.user_id (which is NOT NULL).
+    channel: Mapped[Channel] = relationship(
+        back_populates="owner",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def is_banned(self) -> bool:
