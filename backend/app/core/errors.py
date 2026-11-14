@@ -78,6 +78,12 @@ class PayloadTooLargeError(AppError):
     message = "Payload too large"
 
 
+class UnsupportedMediaError(AppError):
+    status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+    code = "unsupported_media_type"
+    message = "Unsupported file type"
+
+
 class RateLimitedError(AppError):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     code = "rate_limited"

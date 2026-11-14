@@ -29,7 +29,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--worker
 # --- test image: runtime code + dev dependencies + tests ---
 FROM base AS test
 COPY requirements-dev.txt .
-RUN pip install -r requirements-dev.txt
+RUN pip install -r requirements-dev.txt && chown app:app /app  # pytest writes its cache here
 COPY --chown=app:app pyproject.toml alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app

@@ -33,6 +33,8 @@ from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.db.session import get_db
 from app.main import app
+from app.storage import s3
+from app.workers import queue
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -143,3 +145,35 @@ def client(db_session: Session, redis_client: Redis) -> Iterator[TestClient]:
             yield test_client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def enqueued(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Record Celery enqueues instead of sending them to a broker.
+
+    Worker tests call the task functions directly; API tests assert on this list.
+    """
+    calls: list[tuple[str, str]] = []
+
+    def record(kind: str):
+        def _enqueue(video_id: str) -> bool:
+            calls.append((kind, video_id))
+            return True
+
+        return _enqueue
+
+    monkeypatch.setattr(queue, "enqueue_video_processing", record("process"))
+    monkeypatch.setattr(queue, "enqueue_video_deletion", record("delete"))
+    return calls
+
+
+@pytest.fixture
+def storage_cleanup() -> Iterator[list[str]]:
+    """Append video ids / channel ids; their objects are deleted after the test."""
+    prefixes: list[str] = []
+    yield prefixes
+    settings = get_settings()
+    for item in prefixes:
+        s3.delete_prefix(settings.uploads_bucket, f"{item}/")
+        s3.delete_prefix(settings.media_bucket, f"videos/{item}/")
+        s3.delete_prefix(settings.media_bucket, f"channels/{item}/")
