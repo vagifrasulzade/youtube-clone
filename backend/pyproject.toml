@@ -34,4 +34,5 @@ known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# --tb=short: long tracebacks can print connection info (incl. DB password) on failures.
+addopts = "-ra --strict-markers --tb=short"

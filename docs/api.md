@@ -27,7 +27,7 @@ Auth column: **—** anonymous allowed (optional auth personalizes the response)
 | POST | `/auth/refresh` | cookie | → `200 {access_token, expires_in}` + rotated cookie | Reuse of an old token revokes the family |
 | POST | `/auth/logout` | cookie | → `204` | Revokes the family, clears the cookie |
 | GET | `/auth/me` | U | → `{id, email, role, channel: {...}}` | |
-| POST | `/auth/change-password` | U | `{current_password, new_password}` → `204` | Revokes other sessions |
+| POST | `/auth/change-password` | U | `{current_password, new_password}` → `200 {access_token, expires_in, user}` + new cookie | Revokes every other session. 5 per 15 min per account |
 
 ## Videos
 

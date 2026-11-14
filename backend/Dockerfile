@@ -21,8 +21,10 @@ USER app
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)"]
-# The API is reachable only through nginx on the internal network, so proxy headers are trusted.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "*", "--no-access-log"]
+# X-Forwarded-For is honoured only from the proxy address in $FORWARDED_ALLOW_IPS (uvicorn
+# reads it; default 127.0.0.1). Never "*": any peer could then pick its own client IP and
+# bypass per-IP rate limits (security review M2). compose sets it to nginx's fixed address.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--no-access-log"]
 
 # --- test image: runtime code + dev dependencies + tests ---
 FROM base AS test

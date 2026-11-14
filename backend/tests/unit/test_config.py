@@ -36,3 +36,13 @@ def test_production_accepts_strong_distinct_secrets() -> None:
 
 def test_development_allows_dev_defaults() -> None:
     assert _settings(env="development").env == "development"
+
+
+def test_production_refuses_disabled_rate_limiting() -> None:
+    with pytest.raises(ValidationError, match="RATE_LIMIT_ENABLED"):
+        _settings(
+            env="production",
+            jwt_secret=STRONG_A,
+            media_token_secret=STRONG_B,
+            rate_limit_enabled="false",
+        )
