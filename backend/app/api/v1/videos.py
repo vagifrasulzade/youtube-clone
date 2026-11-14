@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
 from redis.exceptions import RedisError
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
@@ -19,7 +19,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, feeds, reactions, uploads
+from app.services import access, feeds, reactions, uploads, views
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -163,3 +163,16 @@ def remove_reaction(video_id: str, user: CurrentUser, db: DbSession) -> Reaction
     return ReactionOut(
         like_count=video.like_count, dislike_count=video.dislike_count, my_reaction=None
     )
+
+
+@router.post(
+    "/{video_id}/views",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Count a view (at most once per viewer per 24 h)",
+    dependencies=[Depends(rate_limit.limit_by_ip("views", limit=120, window_seconds=60))],
+)
+def record_view(
+    video_id: str, request: Request, viewer: OptionalUser, db: DbSession, redis: RedisClient
+) -> dict[str, bool]:
+    counted = views.record_view(db, redis, video_id, viewer, rate_limit.client_ip(request))
+    return {"counted": counted}
