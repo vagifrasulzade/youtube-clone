@@ -3,7 +3,14 @@
 import unicodedata
 from typing import Annotated
 
-from pydantic import AfterValidator, BeforeValidator, StringConstraints
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, StringConstraints
+
+
+class RequestModel(BaseModel):
+    """Base for request bodies: unknown fields are rejected (422), so fields such as
+    `status`, `role` or `channel_id` can never be mass-assigned."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 def _strip(value: object) -> object:
