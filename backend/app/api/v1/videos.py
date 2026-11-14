@@ -8,6 +8,8 @@ from redis.exceptions import RedisError
 from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
 from app.schemas.video import (
+    ReactionOut,
+    ReactionRequest,
     UploadCreatedOut,
     UploadPolicyOut,
     UploadRequest,
@@ -16,7 +18,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, uploads
+from app.services import access, reactions, uploads
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -126,3 +128,21 @@ def upload_thumbnail(
 def delete_video(video_id: str, user: CurrentUser, db: DbSession) -> Response:
     video_service.delete_video(db, video_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{video_id}/reaction", summary="Like or dislike (idempotent)")
+def set_reaction(
+    video_id: str, body: ReactionRequest, user: CurrentUser, db: DbSession
+) -> ReactionOut:
+    video = reactions.set_reaction(db, user, video_id, body.value)
+    return ReactionOut(
+        like_count=video.like_count, dislike_count=video.dislike_count, my_reaction=body.value
+    )
+
+
+@router.delete("/{video_id}/reaction", summary="Remove my like/dislike (idempotent)")
+def remove_reaction(video_id: str, user: CurrentUser, db: DbSession) -> ReactionOut:
+    video = reactions.remove_reaction(db, user, video_id)
+    return ReactionOut(
+        like_count=video.like_count, dislike_count=video.dislike_count, my_reaction=None
+    )

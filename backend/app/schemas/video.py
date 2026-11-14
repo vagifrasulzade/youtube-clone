@@ -157,3 +157,13 @@ class VideoDetailOut(BaseModel):
             is_subscribed=is_subscribed,
             can_edit=can_edit,
         )
+
+
+class ReactionRequest(RequestModel):
+    value: Literal["like", "dislike"]
+
+
+class ReactionOut(BaseModel):
+    like_count: int
+    dislike_count: int
+    my_reaction: Literal["like", "dislike"] | None
