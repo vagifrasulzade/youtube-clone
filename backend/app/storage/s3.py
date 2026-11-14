@@ -174,7 +174,8 @@ def get_stream(bucket: str, key: str, byte_range: str | None = None) -> dict[str
     try:
         return get_client().get_object(**params)
     except ClientError as exc:
-        if _is_not_found(exc):
+        # Callers map these to 404 / 416; anything else is a storage outage.
+        if _is_not_found(exc) or exc.response.get("Error", {}).get("Code") == "InvalidRange":
             raise
         raise StorageError() from exc
     except BotoCoreError as exc:

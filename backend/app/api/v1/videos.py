@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Response, UploadFile, status
 from redis.exceptions import RedisError
 
-from app.api.deps import CurrentUser, DbSession, RedisClient
+from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
 from app.schemas.video import (
     UploadCreatedOut,
     UploadPolicyOut,
     UploadRequest,
+    VideoDetailOut,
     VideoOwnerOut,
     VideoStatusOut,
     VideoUpdateRequest,
 )
 from app.services import access, uploads
+from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
@@ -79,9 +81,48 @@ def update_video(
     video_id: str, body: VideoUpdateRequest, user: CurrentUser, db: DbSession
 ) -> VideoOwnerOut:
     video = access.get_owned_video(db, video_id, user)
-    for field, value in body.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(video, field, value)
+    changes = body.model_dump(exclude_unset=True, exclude_none=True)
+    thumbnail = changes.pop("thumbnail", None)
+    for field, value in changes.items():
+        setattr(video, field, value)
+    if thumbnail is not None:
+        video_service.select_thumbnail(video, thumbnail)
     db.commit()
     db.refresh(video)
     return VideoOwnerOut.from_model(video)
+
+
+@router.get("/{video_id}", summary="Watch page details (404 if you may not see it)")
+def get_video(video_id: str, viewer: OptionalUser, db: DbSession) -> VideoDetailOut:
+    video = access.get_viewable_video_or_404(db, video_id, viewer)
+    return VideoDetailOut.build(
+        video,
+        viewer,
+        my_reaction=video_service.my_reaction(db, video, viewer),
+        is_subscribed=video_service.is_subscribed(db, video, viewer),
+        can_edit=access.is_owner(video, viewer),
+    )
+
+
+@router.put(
+    "/{video_id}/thumbnail",
+    summary="Upload a custom thumbnail (JPEG/PNG/WebP, re-encoded; owner only)",
+    dependencies=[
+        Depends(rate_limit.limit_by_ip("video-thumbnail", limit=30, window_seconds=3600))
+    ],
+)
+def upload_thumbnail(
+    video_id: str, file: UploadFile, user: CurrentUser, db: DbSession
+) -> VideoOwnerOut:
+    video = access.get_owned_video(db, video_id, user)
+    return VideoOwnerOut.from_model(video_service.upload_custom_thumbnail(db, video, file.file))
+
+
+@router.delete(
+    "/{video_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a video (owner or admin); storage is cleaned up asynchronously",
+)
+def delete_video(video_id: str, user: CurrentUser, db: DbSession) -> Response:
+    video_service.delete_video(db, video_id, user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

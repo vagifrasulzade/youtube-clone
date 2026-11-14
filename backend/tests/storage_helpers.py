@@ -49,3 +49,35 @@ def image_bytes(fmt: str = "PNG", size: tuple[int, int] = (1000, 500)) -> bytes:
     out = BytesIO()
     Image.new("RGB", size, color=(200, 30, 30)).save(out, format=fmt)
     return out.getvalue()
+
+
+def make_ready_video(db, channel, storage_cleanup: list[str], **fields: Any):
+    """A processed video whose playback file and thumbnail really exist in MinIO."""
+    from datetime import UTC, datetime
+
+    from app.models import Video
+    from app.models.enums import VideoStatus, Visibility
+    from app.storage import keys
+
+    fields.setdefault("title", "Ready video")
+    fields.setdefault("visibility", Visibility.PUBLIC)
+    video = Video(channel_id=channel.id, status=VideoStatus.READY, **fields)
+    db.add(video)
+    db.flush()
+    settings = get_settings()
+    video.playback_key = keys.video_playback(video.id)
+    video.thumbnail_key = keys.video_thumbnail(video.id, "auto_2")
+    video.published_at = datetime.now(UTC)
+    s3.put_bytes(
+        settings.media_bucket, video.playback_key, PLAYBACK_BYTES, content_type="video/mp4"
+    )
+    s3.put_bytes(
+        settings.media_bucket, video.thumbnail_key, image_bytes("JPEG"), content_type="image/jpeg"
+    )
+    db.flush()
+    storage_cleanup.append(video.id)
+    return video
+
+
+# 1000 deterministic bytes: enough to check Range arithmetic exactly.
+PLAYBACK_BYTES = bytes(range(250)) * 4
