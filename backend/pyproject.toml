@@ -29,6 +29,8 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+# backend/alembic/ (migrations dir) would otherwise make ruff treat `alembic` as first-party.
+known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
