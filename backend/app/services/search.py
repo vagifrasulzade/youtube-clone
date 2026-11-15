@@ -2,7 +2,9 @@
 
 - `search_vector` (generated tsvector, 'simple' config: works for AZ/RU/EN alike, title
   weighted above description) answers word matches, served by a GIN index.
-- `pg_trgm` similarity on the title catches typos and partial words ("plof" -> "plov").
+- `pg_trgm` word_similarity on the title catches typos and partial words ("plof" ->
+  "plov"). word_similarity compares the query with the best-matching PART of the title;
+  plain similarity compares whole strings and misses typos in long titles.
 Only listable videos are ever returned (C3).
 """
 
@@ -17,7 +19,7 @@ from app.models import Video
 from app.services import access
 
 SearchSort = Literal["relevance", "date", "views"]
-TRIGRAM_THRESHOLD = 0.3
+TRIGRAM_THRESHOLD = 0.5  # word_similarity; measured on the demo titles (see tests)
 
 
 def search_videos(
@@ -25,7 +27,7 @@ def search_videos(
 ) -> tuple[list[Video], int]:
     tsquery = func.websearch_to_tsquery("simple", query)
     text_match = Video.search_vector.op("@@")(tsquery)
-    similarity = func.similarity(Video.title, query)
+    similarity = func.word_similarity(query, Video.title)
     matches = or_(text_match, similarity >= TRIGRAM_THRESHOLD)
 
     base = select(Video).where(access.listable_filter(), matches)
@@ -56,11 +58,11 @@ def suggestions(db: Session, prefix: str, limit: int = 10) -> list[str]:
         select(Video.title)
         .where(
             access.listable_filter(),
-            or_(starts, func.similarity(Video.title, prefix) >= TRIGRAM_THRESHOLD),
+            or_(starts, func.word_similarity(prefix, Video.title) >= TRIGRAM_THRESHOLD),
         )
         .group_by(Video.title)
         .order_by(
-            func.bool_or(starts).desc(), func.max(func.similarity(Video.title, prefix)).desc()
+            func.bool_or(starts).desc(), func.max(func.word_similarity(prefix, Video.title)).desc()
         )
         .limit(limit)
     )
