@@ -226,6 +226,7 @@ def make_playback(
             raise
         finally:
             timer.cancel()
+            process.stdout.close()  # the pipe is not closed for us without `with Popen`
     if timed_out.is_set():
         raise MediaError("Processing the file took too long")
     if returncode != 0:
