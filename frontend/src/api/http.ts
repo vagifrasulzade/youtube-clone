@@ -1,7 +1,7 @@
 // JSON client for /api/v1. Adds the in-memory access token when there is one, and on a
 // 401 refreshes it once (via the HttpOnly cookie) and retries the request.
 
-import { getAccessToken, notifySessionExpired, refreshAccessToken } from '../auth/session'
+import { getAccessToken, notifySessionExpired, refreshAccessToken, waitForStartup } from '../auth/session'
 
 export interface FieldError {
   loc: (string | number)[]
@@ -80,10 +80,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     return fetch(url, { method: options.method ?? 'GET', headers, body, credentials: 'same-origin' })
   }
 
+  await waitForStartup()
   const token = getAccessToken()
   let response = await send(token)
   if (response.status === 401 && token) {
-    const fresh = await refreshAccessToken()
+    // Another request may already have refreshed while this one was in flight.
+    const current = getAccessToken()
+    const fresh = current && current !== token ? current : await refreshAccessToken()
     if (fresh) response = await send(fresh)
     else notifySessionExpired()
   }
