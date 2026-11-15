@@ -41,7 +41,15 @@ Anyone can register at `/register` (email, password of 8+ characters, channel na
 docker compose exec api python -m app.cli.create_admin someone@example.com
 ```
 
-Admins can then make other users moderators in the admin panel. Every permission is checked by the API: the frontend only hides links a role cannot use.
+Admins can then make other users moderators in the admin panel.
+
+**Forgot a password?** This includes the demo accounts after `DEMO_PASSWORD` was changed in `.env`: the seed stores the password only once, so editing `.env` later does not change it. Set a new password from the server shell:
+
+```bash
+docker compose exec api python -m app.cli.reset_password admin@example.com
+```
+
+It asks for the new password twice without echo (never as an argument, so it stays out of the shell history) and signs that account out everywhere. Every permission is checked by the API: the frontend only hides links a role cannot use.
 
 ## Screens
 

@@ -212,12 +212,20 @@ def logout(db: Session, raw_token: str | None) -> None:
         revoke_family(db, row.family_id)
 
 
-def change_password(db: Session, user: User, *, current_password: str, new_password: str) -> None:
-    if not verify_password(user.password_hash, current_password):
-        raise BadRequestError("Current password is incorrect", code="wrong_password")
-    if verify_password(user.password_hash, new_password):
-        raise BadRequestError("New password must differ from the current one", code="same_password")
-    # Same policy as registration (security review L1).
+PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH = 8, 128  # as schemas.auth.Password
+
+
+def set_password(db: Session, user: User, new_password: str) -> None:
+    """Store a new password and sign the account out everywhere.
+
+    Same policy as registration (security review L1): 8-128 characters, not the email,
+    its local part or the handle. Used by change-password and the operator CLI.
+    """
+    if not PASSWORD_MIN_LENGTH <= len(new_password) <= PASSWORD_MAX_LENGTH:
+        raise BadRequestError(
+            f"Password must be {PASSWORD_MIN_LENGTH}-{PASSWORD_MAX_LENGTH} characters",
+            code="weak_password",
+        )
     forbidden = {user.email, user.email.split("@")[0], user.channel.handle}
     if new_password.lower() in forbidden:
         raise BadRequestError(
@@ -225,3 +233,11 @@ def change_password(db: Session, user: User, *, current_password: str, new_passw
         )
     user.password_hash = hash_password(new_password)
     revoke_all_sessions(db, user.id)
+
+
+def change_password(db: Session, user: User, *, current_password: str, new_password: str) -> None:
+    if not verify_password(user.password_hash, current_password):
+        raise BadRequestError("Current password is incorrect", code="wrong_password")
+    if verify_password(user.password_hash, new_password):
+        raise BadRequestError("New password must differ from the current one", code="same_password")
+    set_password(db, user, new_password)
