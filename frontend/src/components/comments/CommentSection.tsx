@@ -74,6 +74,7 @@ function Composer(props: {
           maxLength={MAX_LENGTH}
           autoFocus={props.autoFocus}
           placeholder={props.placeholder}
+          aria-label={props.placeholder}
           onFocus={() => setFocused(true)}
           onChange={(event) => setBody(event.target.value)}
           className="field-sizing-content w-full resize-none border-b border-yt-border bg-transparent pb-1 text-sm outline-none focus:border-yt-text"

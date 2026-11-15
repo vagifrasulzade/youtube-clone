@@ -136,7 +136,7 @@ URLs are produced by the API inside responses. Clients never build them.
 | PATCH | `/admin/users/{id}/role` | `{role}`. You cannot change your own role, and the last admin cannot be demoted. Audited |
 | POST | `/admin/users/{id}/ban` · `/unban` | `{reason}`. Not yourself, and not another admin (demote first). Revokes sessions. Audited |
 | GET | `/admin/videos` | `?q&status&visibility&hidden&page` |
-| DELETE | `/admin/videos/{id}` | Same as owner delete + audit row |
+| DELETE | `/videos/{id}` | Admins delete through the owner route; the deletion is audited (there is no separate admin route) |
 
 ## Health
 

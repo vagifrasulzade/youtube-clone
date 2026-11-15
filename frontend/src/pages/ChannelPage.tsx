@@ -35,7 +35,7 @@ function VideosTab({ handle }: { handle: string }) {
   const videos = useInfiniteQuery({
     queryKey: ['channel-videos', handle, sort],
     queryFn: ({ pageParam }) =>
-      getJson<VideoPage>(`/channels/${handle}/videos`, {
+      getJson<VideoPage>(`/channels/${encodeURIComponent(handle)}/videos`, {
         sort,
         limit: '30',
         ...(pageParam ? { cursor: pageParam } : {}),
@@ -88,7 +88,7 @@ function VideosTab({ handle }: { handle: string }) {
 function PlaylistsTab({ handle }: { handle: string }) {
   const playlists = useQuery({
     queryKey: ['channel-playlists', handle],
-    queryFn: () => getJson<PlaylistCard[]>(`/channels/${handle}/playlists`),
+    queryFn: () => getJson<PlaylistCard[]>(`/channels/${encodeURIComponent(handle)}/playlists`),
   })
   if (playlists.isSuccess && playlists.data.length === 0) {
     return <p className="py-16 text-center text-yt-muted">No playlists yet.</p>

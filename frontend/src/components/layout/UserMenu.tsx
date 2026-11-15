@@ -49,6 +49,7 @@ export function UserMenu() {
       <button
         type="button"
         aria-label="Account menu"
+        aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="rounded-full"

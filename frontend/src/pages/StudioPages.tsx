@@ -59,6 +59,7 @@ export function StudioPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              aria-label="Filter videos by title"
               placeholder="Filter by title"
               maxLength={100}
               className="rounded-full border border-yt-border px-4 py-2 text-sm outline-none focus:border-yt-blue"
@@ -262,6 +263,7 @@ function Sharing({ videoId }: { videoId: string }) {
           value={handle}
           onChange={(event) => setHandle(event.target.value)}
           placeholder="@handle"
+          aria-label="Handle to share with"
           className="flex-1 rounded-md border border-yt-border px-3 py-2 text-sm outline-none focus:border-yt-blue"
         />
         <button type="submit" className="rounded-full bg-yt-hover px-4 py-2 text-sm font-medium hover:bg-yt-active">
@@ -291,6 +293,11 @@ function Sharing({ videoId }: { videoId: string }) {
 
 export function StudioVideoPage() {
   const { id = '' } = useParams()
+  // Keyed by id: unsaved edits of one video never carry over to the next.
+  return <StudioVideoEditor key={id} id={id} />
+}
+
+function StudioVideoEditor({ id }: { id: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const detail = useQuery({
@@ -303,18 +310,23 @@ export function StudioVideoPage() {
   const [message, setMessage] = useState<string | null>(null)
 
   const save = useMutation({
+    // PATCH answers with the owner view (VideoOwnerOut), not the watch-page detail:
+    // merge its fields, then refetch the detail (stream/thumbnail URLs, flags).
     mutationFn: (changes: NonNullable<typeof form>) =>
-      request<VideoDetail>(`/videos/${id}`, { method: 'PATCH', json: changes }),
+      request<StudioVideo>(`/videos/${encodeURIComponent(id)}`, { method: 'PATCH', json: changes }),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['video', id], updated)
+      queryClient.setQueryData<VideoDetail>(['video', id], (old) => old && { ...old, ...updated })
+      void queryClient.invalidateQueries({ queryKey: ['video', id] })
+      void queryClient.invalidateQueries({ queryKey: ['studio'] })
       setForm(null)
       setMessage('Changes saved')
     },
     onError: (err) => setMessage(describeError(err)),
   })
   const remove = useMutation({
-    mutationFn: () => request(`/videos/${id}`, { method: 'DELETE' }),
+    mutationFn: () => request(`/videos/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ['video', id] })
       void queryClient.invalidateQueries({ queryKey: ['studio'] })
       navigate('/studio', { replace: true })
     },

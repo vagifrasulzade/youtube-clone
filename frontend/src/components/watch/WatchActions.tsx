@@ -17,8 +17,10 @@ export function ReactionButtons({ video }: { video: VideoDetail }) {
       video.my_reaction === value
         ? request<ReactionOut>(`/videos/${video.id}/reaction`, { method: 'DELETE' })
         : request<ReactionOut>(`/videos/${video.id}/reaction`, { method: 'PUT', json: { value } }),
-    onSuccess: (counts) =>
-      queryClient.setQueryData<VideoDetail>(['video', video.id], (old) => old && { ...old, ...counts }),
+    onSuccess: (counts) => {
+      queryClient.setQueryData<VideoDetail>(['video', video.id], (old) => old && { ...old, ...counts })
+      void queryClient.invalidateQueries({ queryKey: ['liked'] })
+    },
   })
 
   const click = (value: 'like' | 'dislike') => {
@@ -30,6 +32,7 @@ export function ReactionButtons({ video }: { video: VideoDetail }) {
     <div className="flex items-center rounded-full bg-yt-hover text-sm font-medium">
       <button
         type="button"
+        aria-label={`Like (${video.like_count.toLocaleString('en')})`}
         aria-pressed={video.my_reaction === 'like'}
         disabled={react.isPending}
         onClick={() => click('like')}
@@ -66,12 +69,19 @@ interface SubscribeProps {
 
 export function SubscribeButton({ handle, subscribed, onChange }: SubscribeProps) {
   const requireLogin = useRequireLogin()
+  const queryClient = useQueryClient()
   const toggle = useMutation({
     mutationFn: () =>
       request<SubscriptionOut>(`/channels/${encodeURIComponent(handle)}/subscription`, {
         method: subscribed ? 'DELETE' : 'PUT',
       }),
-    onSuccess: onChange,
+    onSuccess: (state) => {
+      onChange(state)
+      // Other cached pages of this channel and the subscriptions feed are now stale.
+      void queryClient.invalidateQueries({ queryKey: ['channel'] })
+      void queryClient.invalidateQueries({ queryKey: ['video'] })
+      void queryClient.invalidateQueries({ queryKey: ['feed', 'subscriptions'] })
+    },
   })
 
   return (

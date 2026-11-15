@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type DragEvent, type FormEvent, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -55,6 +55,7 @@ type Phase = 'pick' | 'uploading' | 'processing'
 export function UploadPage() {
   usePageTitle('Upload video')
   const input = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
   const [phase, setPhase] = useState<Phase>('pick')
   const [videoId, setVideoId] = useState<string | null>(null)
   const [uploaded, setUploaded] = useState(0)
@@ -68,6 +69,7 @@ export function UploadPage() {
     queryFn: () => request<VideoStatus>(`/videos/${videoId}/status`),
     enabled: phase === 'processing' && videoId !== null,
     refetchInterval: (query) => {
+      if (query.state.status === 'error') return false // e.g. the video was deleted
       const state = query.state.data?.status
       return state === 'ready' || state === 'failed' ? false : 2000
     },
@@ -89,6 +91,7 @@ export function UploadPage() {
       setVideoId(created.video.id)
       await postToStorage(created.upload, file, setUploaded)
       await request(`/videos/${created.video.id}/upload-complete`, { method: 'POST' })
+      void queryClient.invalidateQueries({ queryKey: ['studio'] })
       setPhase('processing')
     } catch (err) {
       setError(err instanceof Error && !('status' in err) ? err.message : describeError(err))

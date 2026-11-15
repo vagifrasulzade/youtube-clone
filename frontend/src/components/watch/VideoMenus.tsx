@@ -77,18 +77,22 @@ export function ReportButton({ videoId }: { videoId: string }) {
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-2">
+            <fieldset className="flex flex-col gap-2">
+            <legend className="sr-only">What is the problem?</legend>
             {REASONS.map(([value, label]) => (
               <label key={value} className="flex items-center gap-3 text-sm">
                 <input type="radio" name="reason" checked={reason === value} onChange={() => setReason(value)} />
                 {label}
               </label>
             ))}
+            </fieldset>
             <textarea
               value={details}
               maxLength={1000}
               rows={3}
               onChange={(event) => setDetails(event.target.value)}
               placeholder="Details (optional)"
+              aria-label="Details (optional)"
               className="mt-2 rounded-md border border-yt-border p-2 text-sm outline-none focus:border-yt-blue"
             />
             <div className="mt-2 flex justify-end gap-2">

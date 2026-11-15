@@ -112,7 +112,8 @@ function ReportsTab() {
         ? request(`/moderation/reports/${report.id}/dismiss`, { method: 'POST', json: { note } })
         : request(`/moderation/reports/${report.id}/resolve`, { method: 'POST', json: { note, hide_video: kind === 'hide' } })
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reports'] }),
+    // Hiding a video changes the admin lists, stats and the video's own pages too.
+    onSuccess: () => queryClient.invalidateQueries(),
   })
 
   return (
@@ -193,6 +194,7 @@ function VideoActionForm() {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="Video id or watch URL"
+        aria-label="Video id or watch URL"
         className="min-w-64 flex-1 rounded-md border border-yt-border bg-white px-3 py-2 outline-none focus:border-yt-blue"
       />
       <button type="button" disabled={!value.trim() || act.isPending} onClick={() => act.mutate('hide')} className="rounded-full bg-[#c5221f] px-4 py-2 font-medium text-white disabled:opacity-50">
@@ -337,6 +339,7 @@ function UsersTab() {
           value={q}
           onChange={(event) => setQ(event.target.value)}
           placeholder="Search by email or handle"
+          aria-label="Search users by email or handle"
           maxLength={100}
           className="w-80 rounded-full border border-yt-border px-4 py-2 text-sm outline-none focus:border-yt-blue"
         />
@@ -409,12 +412,12 @@ function VideosTab() {
     queryFn: () =>
       getJson<Numbered<StudioVideo>>('/admin/videos', { hidden: hiddenOnly ? 'true' : undefined, page: String(page) }),
   })
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin-videos'] })
+  const refresh = () => queryClient.invalidateQueries()
   const act = useMutation({
     mutationFn: ({ video, kind }: { video: StudioVideo; kind: 'hide' | 'restore' | 'delete' }) => {
       if (kind === 'delete') {
         if (!window.confirm(`Delete "${video.title}" permanently? This is audited.`)) return Promise.resolve(null)
-        return request(`/admin/videos/${video.id}`, { method: 'DELETE' })
+        return request(`/videos/${video.id}`, { method: 'DELETE' }) // audited for admins
       }
       const note = askNote(kind === 'hide' ? 'Why is this video hidden?' : 'Why is this video restored?')
       if (!note) return Promise.resolve(null)
