@@ -15,6 +15,10 @@ celery_app.conf.update(
     task_acks_late=True,  # a crashed worker's task is redelivered
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,  # CPU-heavy tasks: take one at a time
+    # Global limits (docs/video-storage.md section 3): a runaway task is stopped, and the
+    # watchdog fails 'processing' rows older than the hard limit (review L4).
+    task_soft_time_limit=30 * 60,
+    task_time_limit=35 * 60,
     broker_connection_retry_on_startup=True,
     timezone="UTC",
     beat_schedule={

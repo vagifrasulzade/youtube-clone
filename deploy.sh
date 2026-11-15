@@ -70,22 +70,39 @@ compose() { $DOCKER compose "$@"; }
 
 secret() { openssl rand -hex "$1"; }  # hex: safe inside URLs and .env
 
+command -v openssl >/dev/null 2>&1 || $SUDO apt-get install -y openssl
+umask 077
 if [ ! -f .env ]; then
-  command -v openssl >/dev/null 2>&1 || $SUDO apt-get install -y openssl
   log "Creating .env with freshly generated random secrets"
-  umask 077
   cp .env.example .env
-  set_var() { sed -i "s|^$1=.*|$1=$2|" .env; }
-  set_var APP_ENV production
-  set_var POSTGRES_PASSWORD "$(secret 24)"
-  set_var MINIO_ROOT_PASSWORD "$(secret 24)"
-  set_var MINIO_APP_SECRET_KEY "$(secret 24)"
-  set_var JWT_SECRET "$(secret 32)"
-  set_var MEDIA_TOKEN_SECRET "$(secret 32)"
-  chmod 600 .env
+  sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
 else
-  log "Using the existing .env (secrets unchanged)"
+  log "Using the existing .env (real secrets are kept)"
 fi
+chmod 600 .env
+
+# Every secret that is missing, empty or still a "change-me" placeholder gets a fresh
+# random value, also in a hand-made .env copied from .env.example (review L11).
+ensure_secret() {
+  local name="$1" bytes="$2" current
+  current="$(grep -E "^${name}=" .env | head -1 | cut -d= -f2- || true)"
+  case "$current" in
+    "" | change-me*)
+      if grep -qE "^${name}=" .env; then
+        sed -i "s|^${name}=.*|${name}=$(secret "$bytes")|" .env
+      else
+        printf '%s=%s\n' "$name" "$(secret "$bytes")" >>.env
+      fi
+      ;;
+  esac
+}
+ensure_secret POSTGRES_PASSWORD 24
+ensure_secret MINIO_ROOT_PASSWORD 24
+ensure_secret MINIO_APP_SECRET_KEY 24
+ensure_secret JWT_SECRET 32
+ensure_secret MEDIA_TOKEN_SECRET 32
+# Demo accounts get a random password, never a public default (review H1).
+ensure_secret DEMO_PASSWORD 8
 
 HTTP_PORT="$(grep -E '^HTTP_PORT=' .env | cut -d= -f2 || true)"
 HTTP_PORT="${HTTP_PORT:-80}"
@@ -108,6 +125,7 @@ for _ in $(seq 1 30); do
 done
 [ "${READY:-0}" = 1 ] || die "the API did not become ready; see: docker compose logs api"
 
+DEMO_PASSWORD_VALUE="$(grep -E '^DEMO_PASSWORD=' .env | cut -d= -f2-)"
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT_SUFFIX=""
@@ -121,7 +139,7 @@ cat <<EOF
     Swagger  http://${HOST_IP}${PORT_SUFFIX}/docs
     Health   http://${HOST_IP}${PORT_SUFFIX}/api/v1/health/ready
 
-  Demo accounts (password for all: demo-password-123):
+  Demo accounts (password for all: ${DEMO_PASSWORD_VALUE}, also stored in .env as DEMO_PASSWORD):
     admin@example.com       administrator
     moderator@example.com   moderator
     alice@example.com       creator

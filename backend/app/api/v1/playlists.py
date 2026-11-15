@@ -6,7 +6,8 @@ import uuid
 
 from fastapi import APIRouter, Response, status
 
-from app.api.deps import CurrentUser, DbSession, OptionalUser
+from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
+from app.core import rate_limit
 from app.schemas.playlist import (
     PlaylistAddVideo,
     PlaylistCreate,
@@ -20,7 +21,10 @@ router = APIRouter(prefix="/playlists", tags=["playlists"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Create a playlist")
-def create_playlist(body: PlaylistCreate, user: CurrentUser, db: DbSession) -> PlaylistOut:
+def create_playlist(
+    body: PlaylistCreate, user: CurrentUser, db: DbSession, redis: RedisClient
+) -> PlaylistOut:
+    rate_limit.hit(redis, f"playlist-create:user:{user.id}", limit=30, window_seconds=3600)
     playlist = service.create(
         db, user, title=body.title, description=body.description, visibility=body.visibility
     )
@@ -48,8 +52,13 @@ def delete_playlist(playlist_id: uuid.UUID, user: CurrentUser, db: DbSession) ->
 
 @router.post("/{playlist_id}/videos", status_code=status.HTTP_201_CREATED, summary="Add a video")
 def add_video(
-    playlist_id: uuid.UUID, body: PlaylistAddVideo, user: CurrentUser, db: DbSession
+    playlist_id: uuid.UUID,
+    body: PlaylistAddVideo,
+    user: CurrentUser,
+    db: DbSession,
+    redis: RedisClient,
 ) -> PlaylistOut:
+    rate_limit.hit(redis, f"playlist-add:user:{user.id}", limit=300, window_seconds=3600)
     service.add_video(db, user, playlist_id, body.video_id)
     return service.build_detail(db, service.get_owned(db, playlist_id, user), user)
 

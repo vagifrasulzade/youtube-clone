@@ -20,7 +20,7 @@ cd youtube-clone
 | Swagger UI | `http://<server-ip>/docs` |
 | Health | `http://<server-ip>/api/v1/health/ready` |
 
-**Demo accounts** (password `demo-password-123`): `admin@example.com` (admin), `moderator@example.com` (moderator), `alice@example.com`, `bob@example.com`, `carol@example.com` (creators), `viewer@example.com` (viewer).
+**Demo accounts**: `admin@example.com` (admin), `moderator@example.com` (moderator), `alice@example.com`, `bob@example.com`, `carol@example.com` (creators), `viewer@example.com` (viewer). Their password is **generated randomly** by `deploy.sh`, printed at the end of the run and stored in `.env` as `DEMO_PASSWORD`. For local development without `deploy.sh` it defaults to `demo-password-123`.
 
 After deployment, `scripts/smoke_test.sh` runs the scenario *register → login → upload → process → watch → like → comment* through nginx.
 
@@ -39,7 +39,8 @@ After deployment, `scripts/smoke_test.sh` runs the scenario *register → login 
 | Housekeeping: stale-draft cleanup, stuck-job watchdog, storage cleanup on delete (Celery beat) | ✅ |
 | **Video processing worker** (ffprobe validation, remux/transcode, thumbnails) | ⏳ ffmpeg wrapper done; the Celery task is not written yet, so newly uploaded videos stay `queued` |
 | **Comments API** | ⏳ table and seed data exist; endpoints not written yet |
-| **Frontend (YouTube-style UI)** | ⏳ next stage |
+| Frontend: YouTube-style layout (header with search suggestions, full/mini sidebar, mobile drawer), home feed with infinite scroll, watch page (player with seeking, description, related videos), search results, channel page (videos/playlists tabs), playlist page | ✅ 17 Vitest tests, CI job |
+| **Frontend: sign-in, upload, Studio, moderation/admin screens and like/subscribe/comment actions** | ⏳ need the frontend auth client (next session) |
 
 ## Documentation
 

@@ -23,7 +23,7 @@ def my_videos(
     status: VideoStatus | None = None,
     visibility: Visibility | None = None,
     q: Annotated[str | None, Query(max_length=100)] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
+    page: Annotated[int, Query(ge=1, le=10_000)] = 1,
     page_size: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> NumberedPage[VideoOwnerOut]:
     stmt = select(Video).where(Video.channel_id == user.channel.id)

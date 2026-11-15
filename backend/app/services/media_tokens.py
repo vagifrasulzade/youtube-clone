@@ -19,6 +19,7 @@ from app.core.errors import UnauthorizedError
 from app.models import User
 
 MEDIA_TOKEN_TYPE = "media"  # noqa: S105 - token type claim, not a secret
+MEDIA_SESSION_TYPE = "media_session"
 _ALGORITHM = "HS256"
 
 
@@ -37,8 +38,48 @@ def create_media_token(video_id: str, user_id: uuid.UUID | None) -> str:
     return jwt.encode(payload, settings.media_token_secret.get_secret_value(), _ALGORITHM)
 
 
-def viewer_from_media_token(db: Session, token: str | None, video_id: str) -> User | None:
-    """The viewer a media token identifies (None = anonymous)."""
+def create_media_session(user_id: uuid.UUID, expires_at: datetime) -> str:
+    """Value of the HttpOnly media cookie set at sign-in/refresh (path: the media API).
+
+    A media URL that names a user only acts for that user when this browser also holds
+    that user's media cookie, so a copied link does not unlock private videos for
+    whoever receives it (security review M1).
+    """
+    settings = get_settings()
+    payload = {
+        "typ": MEDIA_SESSION_TYPE,
+        "sub": str(user_id),
+        "iss": settings.jwt_issuer,
+        "exp": int(expires_at.timestamp()),
+    }
+    return jwt.encode(payload, settings.media_token_secret.get_secret_value(), _ALGORITHM)
+
+
+def _media_session_user_id(cookie: str | None) -> str | None:
+    if not cookie:
+        return None
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            cookie,
+            settings.media_token_secret.get_secret_value(),
+            algorithms=[_ALGORITHM],
+            issuer=settings.jwt_issuer,
+            options={"require": ["typ", "sub", "iss", "exp"]},
+        )
+    except jwt.PyJWTError:
+        return None
+    return str(payload["sub"]) if payload.get("typ") == MEDIA_SESSION_TYPE else None
+
+
+def viewer_from_media_token(
+    db: Session, token: str | None, video_id: str, session_cookie: str | None = None
+) -> User | None:
+    """The viewer a media token identifies (None = anonymous).
+
+    A token minted for a user counts only together with that user's media cookie;
+    otherwise the request is treated as anonymous (public videos still play).
+    """
     if not token:
         return None
     settings = get_settings()
@@ -58,7 +99,7 @@ def viewer_from_media_token(db: Session, token: str | None, video_id: str) -> Us
     if payload.get("typ") != MEDIA_TOKEN_TYPE or payload.get("vid") != video_id:
         raise UnauthorizedError("Invalid media link", code="invalid_media_token")
     subject = payload.get("sub")
-    if subject is None:
+    if subject is None or _media_session_user_id(session_cookie) != str(subject):
         return None
     try:
         user = db.get(User, uuid.UUID(str(subject)))

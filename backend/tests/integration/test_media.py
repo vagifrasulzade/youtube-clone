@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models import VideoPermission
 from app.models.enums import RoleName, Visibility
-from app.services.media_tokens import create_media_token
+from app.services.media_tokens import create_media_session, create_media_token
 from tests.factories import auth_headers, create_user
 from tests.storage_helpers import PLAYBACK_BYTES, make_ready_video
 
@@ -21,6 +22,12 @@ from tests.storage_helpers import PLAYBACK_BYTES, make_ready_video
 @pytest.fixture
 def owner(db_session: Session):
     return create_user(db_session)
+
+
+def media_cookie(user) -> dict[str, str]:
+    """The HttpOnly media cookie the browser receives at sign-in (binds media URLs)."""
+    value = create_media_session(user.id, datetime.now(UTC) + timedelta(hours=1))
+    return {"Cookie": f"yt_media={value}"}
 
 
 def _stream_path(video_id: str, user=None) -> str:
@@ -101,7 +108,9 @@ def test_private_stream_is_served_to_allowed_viewers(
         db_session.add(VideoPermission(video_id=video.id, user_id=viewer.id))
         db_session.flush()
 
-    assert client.get(_stream_path(video.id, viewer)).status_code == 200
+    assert (
+        client.get(_stream_path(video.id, viewer), headers=media_cookie(viewer)).status_code == 200
+    )
 
 
 def test_revoking_a_grant_stops_the_next_range_request(
@@ -115,12 +124,17 @@ def test_revoking_a_grant_stops_the_next_range_request(
     db_session.add(VideoPermission(video_id=video.id, user_id=friend.id))
     db_session.flush()
     path = _stream_path(video.id, friend)
-    assert client.get(path, headers={"Range": "bytes=0-9"}).status_code == 206
+    assert (
+        client.get(path, headers={"Range": "bytes=0-9", **media_cookie(friend)}).status_code == 206
+    )
 
     db_session.execute(delete(VideoPermission).where(VideoPermission.video_id == video.id))
     db_session.flush()
 
-    assert client.get(path, headers={"Range": "bytes=10-19"}).status_code == 404
+    assert (
+        client.get(path, headers={"Range": "bytes=10-19", **media_cookie(friend)}).status_code
+        == 404
+    )
 
 
 def test_hidden_video_media_is_404_for_the_public(
@@ -131,7 +145,7 @@ def test_hidden_video_media_is_404_for_the_public(
 
     assert client.get(_stream_path(video.id)).status_code == 404
     assert client.get(f"/api/v1/media/videos/{video.id}/thumbnail").status_code == 404
-    assert client.get(_stream_path(video.id, owner)).status_code == 200
+    assert client.get(_stream_path(video.id, owner), headers=media_cookie(owner)).status_code == 200
 
 
 def test_a_media_token_is_bound_to_one_video(
@@ -143,7 +157,9 @@ def test_a_media_token_is_bound_to_one_video(
     other = make_ready_video(db_session, owner.channel, storage_cleanup)
     token_for_other = create_media_token(other.id, owner.id)
 
-    response = client.get(f"/api/v1/media/videos/{private.id}/stream?t={token_for_other}")
+    response = client.get(
+        f"/api/v1/media/videos/{private.id}/stream?t={token_for_other}", headers=media_cookie(owner)
+    )
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "invalid_media_token"
@@ -171,10 +187,12 @@ def test_public_thumbnail_is_cacheable_private_one_is_not(
     public_response = client.get(f"/api/v1/media/videos/{public.id}/thumbnail")
     private_anonymous = client.get(f"/api/v1/media/videos/{private.id}/thumbnail")
     token = create_media_token(private.id, owner.id)
-    private_owner = client.get(f"/api/v1/media/videos/{private.id}/thumbnail?t={token}")
+    private_owner = client.get(
+        f"/api/v1/media/videos/{private.id}/thumbnail?t={token}", headers=media_cookie(owner)
+    )
 
     assert public_response.status_code == 200
-    assert public_response.headers["cache-control"] == "public, max-age=3600"
+    assert public_response.headers["cache-control"] == "no-cache"  # revalidate: review L7
     assert private_anonymous.status_code == 404
     assert private_owner.status_code == 200
     assert private_owner.headers["cache-control"] == "private, no-store"
@@ -245,3 +263,26 @@ def test_detail_of_private_video_is_404_for_strangers(
 def test_detail_of_unknown_or_malformed_id_is_404(client: TestClient) -> None:
     assert client.get("/api/v1/videos/doesnotexis").status_code == 404
     assert client.get("/api/v1/videos/../../etc").status_code == 404
+
+
+def test_a_copied_media_link_does_not_unlock_a_private_video(
+    client: TestClient, owner, db_session, storage_cleanup
+):
+    """Review M1: the URL names the owner, but another browser lacks the owner's cookie."""
+    video = make_ready_video(
+        db_session, owner.channel, storage_cleanup, visibility=Visibility.PRIVATE
+    )
+    copied = _stream_path(video.id, owner)
+    someone_else = create_user(db_session)
+
+    assert client.get(copied, headers=media_cookie(owner)).status_code == 200
+    assert client.get(copied).status_code == 404  # no cookie: anonymous
+    assert client.get(copied, headers=media_cookie(someone_else)).status_code == 404
+
+
+def test_a_copied_link_to_a_public_video_still_plays(
+    client: TestClient, owner, db_session, storage_cleanup
+):
+    video = make_ready_video(db_session, owner.channel, storage_cleanup)
+
+    assert client.get(_stream_path(video.id, owner)).status_code == 200

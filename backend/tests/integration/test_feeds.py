@@ -156,3 +156,29 @@ def test_related_videos_exclude_self_and_non_listable(
     assert current.id not in ids
     assert ids[0] == similar.id  # most similar title first
     assert set(ids) == {similar.id, unrelated.id}
+
+
+@pytest.mark.parametrize("values", [[True, "zz"], [10**30, "x"], [-1, "x"], ["12", "x"]])
+def test_tampered_popular_cursor_is_a_400_not_a_500(
+    client: TestClient, db_session: Session, values: list
+) -> None:
+    """Review L6"""
+    import base64
+    import json
+
+    channel = create_user(db_session).channel
+    cursor = base64.urlsafe_b64encode(json.dumps(values).encode()).decode().rstrip("=")
+
+    response = client.get(
+        f"/api/v1/channels/{channel.handle}/videos", params={"sort": "popular", "cursor": cursor}
+    )
+
+    assert response.status_code == 400
+
+
+def test_huge_page_numbers_are_rejected(client: TestClient, db_session: Session) -> None:
+    headers = auth_headers(create_user(db_session))
+
+    response = client.get("/api/v1/studio/videos", params={"page": 10**20}, headers=headers)
+
+    assert response.status_code == 422

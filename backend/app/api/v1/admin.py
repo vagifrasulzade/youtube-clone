@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ from app.services import admin as service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-Page = Annotated[int, Query(ge=1)]
+Page = Annotated[int, Query(ge=1, le=10_000)]
 PageSize = Annotated[int, Query(ge=1, le=50)]
 SearchText = Annotated[str | None, Query(max_length=100)]
 
@@ -52,7 +52,9 @@ class AdminUserOut(BaseModel):
 
 
 class RoleChange(RequestModel):
-    role: RoleName
+    # Admins are created only with `python -m app.cli.create_admin` (docs/security.md
+    # section 3.1): a stolen admin session must not be able to mint more admins.
+    role: Literal[RoleName.USER, RoleName.MODERATOR]
 
 
 class BanRequest(RequestModel):

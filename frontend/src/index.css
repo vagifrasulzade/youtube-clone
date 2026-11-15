@@ -1,1 +1,24 @@
+@import "@fontsource/roboto/400.css";
+@import "@fontsource/roboto/500.css";
+@import "@fontsource/roboto/700.css";
 @import "tailwindcss";
+
+/* YouTube-like design tokens (light theme). */
+@theme {
+  --font-sans: "Roboto", "Arial", sans-serif;
+  --color-yt-bg: #ffffff;
+  --color-yt-text: #0f0f0f;
+  --color-yt-muted: #606060;
+  --color-yt-hover: #f2f2f2;
+  --color-yt-active: #e5e5e5;
+  --color-yt-border: #d3d3d3;
+  --color-yt-red: #ff0000;
+  --color-yt-blue: #065fd4;
+}
+
+html,
+body {
+  background: var(--color-yt-bg);
+  color: var(--color-yt-text);
+  font-family: var(--font-sans);
+}

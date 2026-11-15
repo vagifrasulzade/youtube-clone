@@ -27,7 +27,9 @@ ThumbnailChoice = Literal["auto_1", "auto_2", "auto_3", "custom"]
 
 @router.get("/videos/{video_id}/stream", summary="Video stream (supports HTTP Range)")
 def stream_video(video_id: str, request: Request, db: DbSession, t: str | None = None) -> Response:
-    viewer = media_tokens.viewer_from_media_token(db, t, video_id)
+    viewer = media_tokens.viewer_from_media_token(
+        db, t, video_id, request.cookies.get(get_settings().media_cookie_name)
+    )
     video = access.get_viewable_video_or_404(db, video_id, viewer)
     if video.status != VideoStatus.READY or not video.playback_key:
         raise NotFoundError("Video is not ready yet", code="video_not_ready")
@@ -44,7 +46,9 @@ def stream_video(video_id: str, request: Request, db: DbSession, t: str | None =
 def video_thumbnail(
     video_id: str, request: Request, db: DbSession, t: str | None = None
 ) -> Response:
-    viewer = media_tokens.viewer_from_media_token(db, t, video_id)
+    viewer = media_tokens.viewer_from_media_token(
+        db, t, video_id, request.cookies.get(get_settings().media_cookie_name)
+    )
     video = access.get_viewable_video_or_404(db, video_id, viewer)
     if not video.thumbnail_key:
         raise NotFoundError("No thumbnail yet", code="thumbnail_not_found")
@@ -64,7 +68,9 @@ def video_thumbnail(
 def video_thumbnail_candidate(
     video_id: str, choice: ThumbnailChoice, request: Request, db: DbSession, t: str | None = None
 ) -> Response:
-    viewer = media_tokens.viewer_from_media_token(db, t, video_id)
+    viewer = media_tokens.viewer_from_media_token(
+        db, t, video_id, request.cookies.get(get_settings().media_cookie_name)
+    )
     video = access.get_viewable_video_or_404(db, video_id, viewer)
     if not access.is_owner(video, viewer):
         raise NotFoundError("Thumbnail not found", code="thumbnail_not_found")

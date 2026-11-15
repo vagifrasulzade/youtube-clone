@@ -14,6 +14,7 @@ from app.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterReques
 from app.schemas.user import CurrentUserOut
 from app.services import auth as auth_service
 from app.services.auth import IssuedSession
+from app.services.media_tokens import create_media_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,11 +36,31 @@ def _set_refresh_cookie(response: Response, session: IssuedSession) -> None:
     )
 
 
+def _set_media_cookie(response: Response, session: IssuedSession) -> None:
+    settings = get_settings()
+    response.set_cookie(
+        key=settings.media_cookie_name,
+        value=create_media_session(session.user.id, session.refresh_expires_at),
+        max_age=settings.refresh_token_ttl_days * 24 * 3600,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+        path=f"{settings.api_prefix}/media",
+    )
+
+
 def _clear_refresh_cookie(response: Response) -> None:
     settings = get_settings()
     response.delete_cookie(
         key=settings.refresh_cookie_name,
         path=_cookie_path(),
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+    response.delete_cookie(
+        key=settings.media_cookie_name,
+        path=f"{settings.api_prefix}/media",
         httponly=True,
         secure=settings.cookie_secure,
         samesite="strict",
@@ -90,6 +111,7 @@ def register(
     session = auth_service.issue_session(db, user, user_agent=request.headers.get("user-agent"))
     db.commit()
     _set_refresh_cookie(response, session)
+    _set_media_cookie(response, session)
     return _token_response(session)
 
 
@@ -109,6 +131,7 @@ def login(
     session = auth_service.issue_session(db, user, user_agent=request.headers.get("user-agent"))
     db.commit()
     _set_refresh_cookie(response, session)
+    _set_media_cookie(response, session)
     return _token_response(session)
 
 
@@ -128,6 +151,7 @@ def refresh(request: Request, response: Response, db: DbSession) -> TokenRespons
     session = auth_service.rotate_session(db, raw, user_agent=request.headers.get("user-agent"))
     db.commit()
     _set_refresh_cookie(response, session)
+    _set_media_cookie(response, session)
     return _token_response(session)
 
 
@@ -173,4 +197,5 @@ def change_password(
     session = auth_service.issue_session(db, user, user_agent=request.headers.get("user-agent"))
     db.commit()
     _set_refresh_cookie(response, session)
+    _set_media_cookie(response, session)
     return _token_response(session)

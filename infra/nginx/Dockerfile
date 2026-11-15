@@ -11,6 +11,7 @@ RUN npm run build
 FROM nginx:1.28-alpine
 COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/snippets/ /etc/nginx/snippets/
+COPY infra/nginx/errors/ /usr/share/nginx/errors/
 COPY --from=spa /src/dist /usr/share/nginx/html
 # No `nginx -t` here: upstream hosts (api, minio) only resolve on the compose network.
 # nginx validates the config at startup, and the compose health check goes through to

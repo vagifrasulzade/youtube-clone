@@ -10,6 +10,7 @@ STRONG_B = "b" * 48
 
 
 def _settings(**values: str) -> Settings:
+    values.setdefault("s3_secret_key", "a-real-storage-secret")
     return Settings(_env_file=None, **values)  # type: ignore[call-arg]
 
 
@@ -46,3 +47,26 @@ def test_production_refuses_disabled_rate_limiting() -> None:
             media_token_secret=STRONG_B,
             rate_limit_enabled="false",
         )
+
+
+def test_production_refuses_placeholder_storage_secret() -> None:
+    """Review L11"""
+    with pytest.raises(ValidationError, match="S3_SECRET_KEY"):
+        _settings(
+            env="production",
+            jwt_secret=STRONG_A,
+            media_token_secret=STRONG_B,
+            s3_secret_key="change-me-minio-app",
+        )
+
+
+def test_worker_runs_in_production_without_token_secrets() -> None:
+    """Review M2: the media worker never receives JWT/media secrets."""
+    settings = _settings(env="production", process_role="worker")
+
+    assert settings.process_role == "worker"
+
+
+def test_api_still_requires_token_secrets() -> None:
+    with pytest.raises(ValidationError, match="JWT_SECRET"):
+        _settings(env="production", process_role="api")

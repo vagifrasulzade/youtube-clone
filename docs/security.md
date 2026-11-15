@@ -24,7 +24,7 @@
 | Refresh token | 256-bit random opaque value, stored as SHA-256 only, 30 days, **rotated on every use**, and a login (family) lives at most 90 days. Presenting an already-rotated token revokes the whole family (E2). Exception: within 10 s of its rotation it gets `401 refresh_superseded` without revocation, so two tabs refreshing at once do not log the user out. Revocation locks the family's rows before updating them, so a token minted by a concurrent rotation is revoked too |
 | Refresh cookie | `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, and `Secure` when served over HTTPS (`COOKIE_SECURE`). The cookie endpoints also check `Origin` |
 | Frontend storage | Access token in memory only (never in `localStorage`). Silent refresh on page load |
-| Media token | A separate secret, `typ=media`, scoped to one video, 4 h. It identifies the viewer but grants nothing on its own (see § 4) |
+| Media token + media cookie | A separate secret, `typ=media`, scoped to one video, 4 h. It identifies the viewer but grants nothing on its own (see § 4). Sign-in also sets an HttpOnly `SameSite=Strict` cookie scoped to `/api/v1/media`; a token that names a user only acts for that user together with that user's cookie, so a **copied media link does not unlock a private video** for anyone else (review M1) |
 
 ## 3. Authorization
 
@@ -43,7 +43,7 @@
 | Report queue, hide / restore, audit log | – | – | – | ✓ | ✓ |
 | Stats, users, roles, ban / unban | – | – | – | – | ✓ |
 
-Admin guardrails: an admin cannot change their own role or ban themselves, cannot ban another admin without demoting them first, and the last admin can never be demoted. Admins are created only through the seed or the `create_admin` CLI, never through the public API.
+Admin guardrails: an admin cannot change their own role or ban themselves, cannot ban another admin without demoting them first, and the last admin can never be demoted (admin rows are locked while counting, so two admins cannot demote each other at once). The API can grant at most the moderator role; admins are created only with `python -m app.cli.create_admin <email>` from the server shell (review L3). Every role change, ban and admin deletion is audited; audit snapshots hold handles, never emails (L2).
 
 ### 3.2 The video access policy (single source of truth)
 
@@ -84,10 +84,10 @@ def can_view(video, viewer) -> bool:
 ## 6. Media processing hardening
 
 ffmpeg parses untrusted files, so it is the riskiest component.
-- `-protocol_whitelist file` on every ffprobe/ffmpeg call. This blocks HLS/concat tricks that read local files or fetch URLs (SSRF).
+- `-protocol_whitelist file` **and** `-format_whitelist mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi` on every ffprobe/ffmpeg input: no network protocols, and only the allowlisted container demuxers may open an upload, so concat/HLS/image demuxers never run on attacker bytes (review L5).
 - The container format must be in an allowlist before any decoding (via ffprobe `format_name`).
 - Every subprocess has a timeout. Celery has soft and hard time limits. Inputs and outputs live in a temp directory that is always removed.
-- The worker container runs as a non-root user, with CPU and memory limits in compose, no published ports and `no-new-privileges`.
+- The worker container runs as a non-root user with **no token secrets** in its environment (`PROCESS_ROLE=worker`: a compromised ffmpeg cannot forge sessions), `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem with a tmpfs `/tmp`, and memory/CPU/PID limits (2 GB, 2 CPUs, 256). A timer kills ffmpeg at its deadline even if it stalls silently, and Celery enforces 30/35 min soft/hard limits (reviews M2, L4).
 - Arguments are passed as a list to `subprocess.run` (no shell), and paths are server-generated.
 
 ## 7. Rate limits
@@ -123,4 +123,7 @@ The client IP comes from `X-Forwarded-For`, honoured **only** from the proxy add
 - Registration reveals whether an email is already taken (a UX trade-off, the same as YouTube). Login does not.
 - The per-account login limit (5/min) means anyone who knows an email can delay that account's logins by a minute at a time. This is accepted in exchange for stopping distributed password guessing.
 - Access JWTs stay valid for up to 15 minutes after logout or a password change (stateless by design). Bans, however, apply immediately because the user is loaded per request.
-- A media URL copied while valid only works for a viewer who still passes `can_view`, so for a private video it does not work for anyone without a grant.
+- Media cookies are not revocable before they expire (30 days): after logout or a password change on *another* device, that device's media cookie still works until expiry. Bans, grant revocation and hiding still apply on the next request because the access policy runs on every media request.
+- Swagger UI and ReDoc stay enabled on `/docs` and `/redoc` (the brief asks for Swagger). Their CSP needs `'unsafe-inline'` for FastAPI's inline bootstrap script, but script sources are restricted to the two CDN packages they load (review L10).
+- Demo data: `deploy.sh` loads demo accounts with a **randomly generated** password (stored in `.env` as `DEMO_PASSWORD` and printed once); `./deploy.sh --no-seed` skips them (review H1).
+- Openly viewable media is served `no-cache`, so a video that is hidden or made private stops playing on the next request (review L7).

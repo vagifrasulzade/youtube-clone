@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     # Absolute lifetime of one login (token family), however often it is refreshed.
     refresh_family_max_age_days: int = Field(default=90, ge=1)
     refresh_cookie_name: str = "yt_refresh"
+    # Binds media URLs to the browser that obtained them (security review M1).
+    media_cookie_name: str = "yt_media"
     # True when served over HTTPS. Browsers drop Secure cookies on plain-HTTP origins.
     cookie_secure: bool = False
 
@@ -87,10 +89,25 @@ class Settings(BaseSettings):
     media_token_ttl_seconds: int = Field(default=4 * 3600, ge=60)
     internal_presign_ttl_seconds: int = Field(default=60, ge=5)
 
+    # api: serves HTTP and signs tokens. worker: processes media and must NOT hold the
+    # token secrets, so a compromised ffmpeg cannot forge sessions (security review M2).
+    process_role: Literal["api", "worker"] = "api"
+
+    # Password of the demo accounts created by `python -m app.cli.seed`. deploy.sh
+    # generates a random one; in production the seed refuses to run without it (H1).
+    demo_password: SecretStr | None = None
+
     @model_validator(mode="after")
     def _refuse_insecure_production(self) -> Self:
         if self.env != "production":
             return self
+        storage_secret = self.s3_secret_key.get_secret_value()
+        if not storage_secret or storage_secret.startswith("change-me"):
+            raise ValueError("S3_SECRET_KEY must be set to a real value in production")
+        if not self.rate_limit_enabled:
+            raise ValueError("RATE_LIMIT_ENABLED cannot be disabled in production")
+        if self.process_role == "worker":
+            return self  # token secrets are deliberately absent from the worker
         for name, value, dev_default in (
             ("JWT_SECRET", self.jwt_secret, _DEV_JWT_SECRET),
             ("MEDIA_TOKEN_SECRET", self.media_token_secret, _DEV_MEDIA_SECRET),
@@ -103,8 +120,6 @@ class Settings(BaseSettings):
                 )
         if self.jwt_secret.get_secret_value() == self.media_token_secret.get_secret_value():
             raise ValueError("JWT_SECRET and MEDIA_TOKEN_SECRET must differ")
-        if not self.rate_limit_enabled:
-            raise ValueError("RATE_LIMIT_ENABLED cannot be disabled in production")
         return self
 
 
