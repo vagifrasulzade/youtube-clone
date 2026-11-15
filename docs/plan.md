@@ -2,6 +2,35 @@
 
 > **Status: Approved — Stage 1, 2026-11-14.** Order agreed with the architect: **backend first, then frontend.** Day 1 = 2026-11-14, Day 10 = 2026-11-23.
 
+## 0. Progress (updated 2026-11-15, Day 2)
+
+| Stage | Branch | State | Evidence |
+|---|---|---|---|
+| 1 Architecture | `stage/1-architecture` | ✅ merged, tag `stage-1` | design docs, CLAUDE.md, `.claude/` |
+| 2 Schema + foundation | `stage/2-backend-foundation` | ✅ merged, tag `stage-2` | migration up/down/up + `alembic check` in tests |
+| 3 Auth | `stage/3-auth` | ✅ merged, tag `stage-3` | security review: 0 critical/high, findings fixed in `d36fc19` |
+| 4 Storage + upload | `stage/4-storage` | ✅ merged, tag `stage-4` | presigned POST tests against real MinIO |
+| 5 Processing + streaming | `stage/5-processing` | ⏳ streaming, media tokens, ffmpeg wrapper, detail/delete done; **processing Celery task not written yet** | Range 206 via nginx verified |
+| 6 Interactions | `stage/6-interactions` | ⏳ reactions, subscriptions, feeds, views, history, grants, playlists, studio done; **comments API not written yet** | |
+| 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
+| 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
+| 8 Frontend | `stage/8-frontend` | ⏳ dependencies + generated API types | |
+
+Tests: 327 passing (backend), CI green on `stage/10-deployment`.
+
+Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register, login, presigned upload + upload-complete). Step 4 waits because the processing task is missing.
+
+### Deviations from the design (and why)
+
+| Design | Implemented | Reason |
+|---|---|---|
+| `minio/minio` image | `cgr.dev/chainguard/minio` + `minio-client`, pinned by digest | Upstream stopped publishing community images (Docker Hub and quay return "denied") |
+| `pg_trgm` `similarity()` for typos | `word_similarity()` ≥ 0.5 | `similarity()` compares whole strings and missed typos in long titles on the real demo data |
+| nginx static `upstream` | per-request DNS (`resolver` + variable `proxy_pass`) | A static upstream kept stale IPs after api/minio were recreated (502 found in testing) |
+| `httpx` test transport | `httpx2` | Starlette deprecation in the pinned version |
+| Change-password returns 204 | returns new tokens (200) | It signs out every other session, so the caller needs a fresh session |
+| Dev ports 5432/8000 | 5433/6380/8080 | Clashed with local installs on the dev machine |
+
 ## 1. Roadmap (10 days)
 
 Each day ends with green tests, a review of the diff and commits. The "exit criteria" column is what has to be *demonstrated* (real command output), not claimed.

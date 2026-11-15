@@ -131,27 +131,35 @@ sequenceDiagram
 
 - **Media token**: a JWT signed with a *separate* secret, `{typ: "media", vid, sub | null, exp: 4h}`. It is needed because `<video>` cannot send an `Authorization` header. It identifies the viewer; it does **not** grant access by itself. Every request, including every seek, re-runs `can_view` against the DB, so revocation and moderation apply immediately (C4).
 - **The presigned GET is internal only**: it is signed for host `minio:9000`, valid for 60 s, used by nginx within milliseconds, and never seen by the browser.
-- nginx sketch:
+- nginx (abridged from [infra/nginx/nginx.conf](../infra/nginx/nginx.conf)):
   ```nginx
+  # Upstreams are resolved per request (variable proxy_pass), so recreated
+  # containers with new IPs never leave nginx returning 502.
+  resolver 127.0.0.11 valid=10s ipv6=off;
+
   # Browser uploads: POST only; MinIO validates the signed policy.
   location = /storage/upload {
       limit_except POST { deny all; }
       client_max_body_size 2100m;
       proxy_request_buffering off;
-      proxy_pass http://minio:9000/yt-uploads;
+      set $storage_upload http://minio:9000;
+      proxy_pass $storage_upload/yt-uploads;
+      proxy_hide_header Location;            # never reveal storage URLs (B2)
+      proxy_hide_header x-amz-request-id;
   }
 
   # Reachable only through X-Accel-Redirect from the API.
   location ~ ^/_media/(.*)$ {
       internal;
-      resolver 127.0.0.11 valid=30s;           # Docker DNS (proxy_pass uses variables)
-      proxy_pass http://minio:9000/$1$is_args$args;   # variables → path/query passed unmodified, signature intact
+      set $storage minio:9000;
+      proxy_pass http://$storage/$1$is_args$args;  # path/query unmodified: signature intact
       proxy_set_header Host minio:9000;
       proxy_set_header Authorization "";
       proxy_hide_header x-amz-request-id;
       proxy_hide_header x-amz-id-2;
   }
   ```
+  Verified on the running stack: `Range: bytes=0-1023` returns `206` with `Content-Range: bytes 0-1023/<size>` and no storage headers.
   Server-built object keys (`[A-Za-z0-9/_.-]` only) are what makes forwarding the presigned path unmodified safe.
 - **`MEDIA_DELIVERY=proxy`** (dev and tests without nginx): the same endpoint streams from MinIO through FastAPI, forwarding `Range` and returning `206` + `Content-Range`. The authorization code path is identical.
 
