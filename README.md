@@ -37,10 +37,10 @@ After deployment, `scripts/smoke_test.sh` runs the scenario *register → login 
 | Playlists, Creator Studio list, channel profile and images | ✅ |
 | Reports, moderation (hide/restore, resolve/dismiss) with an audit log; admin dashboard API | ✅ |
 | Housekeeping: stale-draft cleanup, stuck-job watchdog, storage cleanup on delete (Celery beat) | ✅ |
-| **Video processing worker** (ffprobe validation, remux/transcode, thumbnails) | ⏳ ffmpeg wrapper done; the Celery task is not written yet, so newly uploaded videos stay `queued` |
-| **Comments API** | ⏳ table and seed data exist; endpoints not written yet |
-| Frontend: YouTube-style layout (header with search suggestions, full/mini sidebar, mobile drawer), home feed with infinite scroll, watch page (player with seeking, description, related videos), search results, channel page (videos/playlists tabs), playlist page | ✅ 17 Vitest tests, CI job |
-| **Frontend: sign-in, upload, Studio, moderation/admin screens and like/subscribe/comment actions** | ⏳ need the frontend auth client (next session) |
+| Video processing worker: ffprobe validation, remux or transcode to H.264 720p, 3 thumbnails, retries, output caps | ✅ real-ffmpeg tests in Docker |
+| Comments with one level of replies (author / owner / staff delete, audited) | ✅ |
+| Frontend: YouTube-style layout (header with search suggestions, full/mini sidebar, mobile drawer), home feed with infinite scroll, watch page (player with seeking, description, related videos), search results, channel page (videos/playlists tabs), playlist page | ✅ |
+| Frontend: sign-in/register, upload with progress, Studio (edit, thumbnails, sharing, delete), library (subscriptions, history, liked, shared, playlists), like/subscribe/comment/report/save, moderation and admin screens | ✅ 34 Vitest tests, CI job |
 
 ## Documentation
 

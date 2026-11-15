@@ -14,11 +14,11 @@
 | 6 Interactions | `stage/6-interactions` + `stage/8-frontend` | ✅ reactions, subscriptions, feeds, views, history, grants, playlists, studio, comments + replies (D2, audited staff deletes) | `scripts/smoke_test.sh` passes all 7 steps; code + security review fixed |
 | 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
 | 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
-| 8 Frontend | `stage/8-frontend` | ⏳ public screens done: home, watch, search (+ suggestions), channel, playlist, page titles, error boundary; **sign-in, upload, Studio, moderation/admin screens and like/subscribe/comment actions not written yet** | Vitest 17 passing, CI frontend job |
+| 8 Frontend | `stage/8-frontend` | ✅ all screens: home, watch (like, subscribe, comments, save, report), search, channel, playlist, sign-in/register, upload, Studio, library, moderation, admin | Vitest 34 passing, production build in the nginx image, all routes served, smoke test end to end |
 
-Tests: 346 passing (backend), 17 passing (frontend); CI green.
+Tests: 407 passing (backend, Docker with ffmpeg), 34 passing (frontend).
 
-Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register, login, presigned upload + upload-complete). Step 4 waits because the processing task is missing.
+Smoke test (`scripts/smoke_test.sh`, through nginx): all 7 steps pass (register → login → upload → process → watch 206 → like → comment), and a copied media link without the cookie is refused (404).
 
 ### Deviations from the design (and why)
 
