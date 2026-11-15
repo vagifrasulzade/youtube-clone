@@ -20,7 +20,7 @@ cd youtube-clone
 | Swagger UI | `http://<server-ip>/docs` |
 | Health | `http://<server-ip>/api/v1/health/ready` |
 
-**Demo accounts** (password `demo-password-123`): `admin@example.com` (admin), `moderator@example.com` (moderator), `alice@example.com`, `bob@example.com`, `carol@example.com` (creators), `viewer@example.com` (viewer).
+**Demo accounts**: `admin@example.com` (admin), `moderator@example.com` (moderator), `alice@example.com`, `bob@example.com`, `carol@example.com` (creators), `viewer@example.com` (viewer). Their password is **generated randomly** by `deploy.sh`, printed at the end of the run and stored in `.env` as `DEMO_PASSWORD`. For local development without `deploy.sh` it defaults to `demo-password-123`.
 
 After deployment, `scripts/smoke_test.sh` runs the scenario *register → login → upload → process → watch → like → comment* through nginx.
 
