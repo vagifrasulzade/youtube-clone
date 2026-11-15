@@ -11,7 +11,7 @@
 | 3 Auth | `stage/3-auth` | ✅ merged, tag `stage-3` | security review: 0 critical/high, findings fixed in `d36fc19` |
 | 4 Storage + upload | `stage/4-storage` | ✅ merged, tag `stage-4` | presigned POST tests against real MinIO |
 | 5 Processing + streaming | `stage/5-processing` + `stage/8-frontend` | ✅ streaming, media tokens, ffmpeg wrapper, detail/delete, processing task (claim, probe, remux/transcode, thumbnails, publish, retries) | `scripts/smoke_test.sh` steps 1–6 through nginx; processing tests run real ffmpeg in Docker; code + security review fixed |
-| 6 Interactions | `stage/6-interactions` | ⏳ reactions, subscriptions, feeds, views, history, grants, playlists, studio done; **comments API not written yet** | |
+| 6 Interactions | `stage/6-interactions` + `stage/8-frontend` | ✅ reactions, subscriptions, feeds, views, history, grants, playlists, studio, comments + replies (D2, audited staff deletes) | `scripts/smoke_test.sh` passes all 7 steps; code + security review fixed |
 | 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
 | 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
 | 8 Frontend | `stage/8-frontend` | ⏳ public screens done: home, watch, search (+ suggestions), channel, playlist, page titles, error boundary; **sign-in, upload, Studio, moderation/admin screens and like/subscribe/comment actions not written yet** | Vitest 17 passing, CI frontend job |
