@@ -21,7 +21,7 @@ from app.services import moderation as service
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
-Page = Annotated[int, Query(ge=1)]
+Page = Annotated[int, Query(ge=1, le=10_000)]
 PageSize = Annotated[int, Query(ge=1, le=50)]
 
 

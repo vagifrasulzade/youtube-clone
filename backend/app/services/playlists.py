@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.models import Channel, Playlist, PlaylistVideo, User, Video
-from app.models.enums import Visibility
+from app.models.enums import VideoStatus, Visibility
 from app.schemas.pages import ChannelBrief, VideoCard
 from app.schemas.playlist import PlaylistCard, PlaylistEntry, PlaylistOut
 from app.services import access
@@ -153,11 +153,36 @@ def video_counts(db: Session, playlist_ids: list[uuid.UUID]) -> dict[uuid.UUID, 
 # --- response builders (apply the access policy to every entry) -------------
 
 
+def visible_in_playlist(db: Session, playlist: Playlist, video: Video, viewer: User | None) -> bool:
+    """Whether a playlist entry may be shown to this viewer (security review L1).
+
+    Being able to *watch* a video is not enough: an unlisted video must not become
+    publicly listed just because someone put it in their public playlist. An entry is
+    shown when the viewer can watch it AND it is publicly listable, or it belongs to the
+    playlist owner's own channel, or the viewer has a personal right to it (owner,
+    staff, explicit grant).
+    """
+    if not access.can_view(db, video, viewer):
+        return False
+    listable = (
+        video.visibility == Visibility.PUBLIC
+        and video.status == VideoStatus.READY
+        and not video.is_hidden
+    )
+    if listable or video.channel_id == playlist.channel_id:
+        return True
+    return (
+        access.is_owner(video, viewer)
+        or access.is_staff(viewer)
+        or (viewer is not None and access.has_grant(db, video.id, viewer.id))
+    )
+
+
 def build_detail(db: Session, playlist: Playlist, viewer: User | None) -> PlaylistOut:
     channel = db.get(Channel, playlist.channel_id)
     items: list[PlaylistEntry] = []
     for position, video in enumerate(entries(db, playlist)):
-        visible = access.can_view(db, video, viewer)
+        visible = visible_in_playlist(db, playlist, video, viewer)
         items.append(
             PlaylistEntry(
                 position=position,
@@ -180,7 +205,9 @@ def build_cards(db: Session, items: list[Playlist], viewer: User | None) -> list
     counts = video_counts(db, [p.id for p in items])
     result = []
     for playlist in items:
-        first = next((v for v in entries(db, playlist) if access.can_view(db, v, viewer)), None)
+        first = next(
+            (v for v in entries(db, playlist) if visible_in_playlist(db, playlist, v, viewer)), None
+        )
         result.append(
             PlaylistCard(
                 id=playlist.id,

@@ -178,3 +178,42 @@ def test_admin_deleting_someone_elses_video_is_audited(
     action = db_session.scalars(select(ModerationAction)).one()
     assert action.action.value == "delete_video"
     assert action.details["title"] == video.title
+
+
+def test_the_api_cannot_create_admins(client: TestClient, db_session: Session, admin: User) -> None:
+    """Review L3: admins come from the server-side CLI only."""
+    target = create_user(db_session)
+
+    response = _role(client, admin, target, "admin")
+
+    assert response.status_code == 422
+
+
+def test_create_admin_cli_promotes_an_existing_account(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+
+    from app.cli import create_admin
+
+    target = create_user(db_session, email="future-admin@example.com")
+    monkeypatch.setattr(create_admin, "get_sessionmaker", lambda: lambda: nullcontext(db_session))
+
+    assert create_admin.main(["Future-Admin@example.com"]) == 0
+    db_session.refresh(target)
+    assert target.role.name == RoleName.ADMIN
+    assert create_admin.main(["nobody@example.com"]) == 1
+
+
+def test_audit_log_never_stores_email_addresses(
+    client: TestClient, db_session: Session, admin: User
+) -> None:
+    """Review L2: moderators can read the audit log, so it keeps handles, not emails."""
+    target = create_user(db_session, email="private-person@example.com")
+    _ban(client, admin, target)
+    _role(client, admin, create_user(db_session), "moderator")
+
+    details = [str(a.details) for a in db_session.scalars(select(ModerationAction))]
+
+    assert details
+    assert all("@" not in d for d in details)

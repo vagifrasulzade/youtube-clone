@@ -101,7 +101,7 @@ def change_role(db: Session, actor: User, user_id: uuid.UUID, role: RoleName) ->
     target.role_id = ROLE_IDS[role]
     audit(
         db, actor, ModerationActionType.CHANGE_ROLE, ModerationTargetType.USER, str(target.id),
-        details={"old_role": old.value, "new_role": role.value, "email": target.email},
+        details={"old_role": old.value, "new_role": role.value, "handle": target.channel.handle},
     )  # fmt: skip
     db.commit()
     db.refresh(target)
@@ -120,7 +120,7 @@ def ban(db: Session, actor: User, user_id: uuid.UUID, reason: str) -> User:
         revoke_all_sessions(db, target.id)  # refresh tokens die now; access is checked per request
         audit(
             db, actor, ModerationActionType.BAN_USER, ModerationTargetType.USER, str(target.id),
-            reason=reason, details={"email": target.email},
+            reason=reason, details={"handle": target.channel.handle},
         )  # fmt: skip
     db.commit()
     db.refresh(target)
@@ -134,7 +134,7 @@ def unban(db: Session, actor: User, user_id: uuid.UUID, reason: str) -> User:
         target.ban_reason = None
         audit(
             db, actor, ModerationActionType.UNBAN_USER, ModerationTargetType.USER, str(target.id),
-            reason=reason, details={"email": target.email},
+            reason=reason, details={"handle": target.channel.handle},
         )  # fmt: skip
     db.commit()
     db.refresh(target)

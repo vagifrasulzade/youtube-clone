@@ -82,4 +82,6 @@ def serve_object(
 
 
 def cache_control_for(openly_viewable: bool) -> str:
-    return "public, max-age=3600" if openly_viewable else "private, no-store"
+    # no-cache: the browser may keep the bytes but must revalidate through the API (and
+    # thus the access policy) before each use, so hiding a video applies immediately.
+    return "no-cache" if openly_viewable else "private, no-store"

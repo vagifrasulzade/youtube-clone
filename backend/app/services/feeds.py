@@ -49,7 +49,7 @@ def _by_views(
     limit = clamp_limit(limit)
     if cursor:
         views, video_id = decode_cursor(cursor, 2)
-        if not isinstance(views, int):
+        if type(views) is not int or not 0 <= views < 2**63:
             raise BadRequestError("Invalid cursor", code="invalid_cursor")
         stmt = stmt.where(tuple_(Video.view_count, Video.id) < tuple_(views, str(video_id)))
     ordered = stmt.order_by(Video.view_count.desc(), Video.id.desc()).limit(limit + 1)
