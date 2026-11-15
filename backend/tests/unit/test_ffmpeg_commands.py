@@ -70,3 +70,31 @@ def test_small_video_is_never_upscaled() -> None:
 def test_large_video_is_scaled_into_720p_box() -> None:
     assert "w=1280:h=720:force_original_aspect_ratio=decrease" in scale_filter(1920, 1080)
     assert "w=1280:h=720" in scale_filter(1080, 1920)  # portrait too
+
+
+def test_every_input_is_limited_to_allowlisted_demuxers() -> None:
+    """Review L5: concat/HLS/image demuxers can never open an uploaded file."""
+    cmd = playback_command(Path("in"), Path("out.mp4"), _probe(video_codec="vp9"))
+
+    whitelist = cmd[cmd.index("-format_whitelist") + 1].split(",")
+    assert cmd.index("-format_whitelist") < cmd.index("-i")
+    assert set(whitelist) == {"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm", "avi"}
+
+
+def test_playback_deadline_fires_even_when_ffmpeg_prints_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review L4: a stalled process is killed by the timer, not only between progress lines."""
+    import sys
+    import time
+
+    from app.workers import ffmpeg
+
+    stall = [sys.executable, "-c", "import time; time.sleep(30)"]
+    monkeypatch.setattr(ffmpeg, "playback_command", lambda *_args: stall)
+
+    started = time.monotonic()
+    with pytest.raises(ffmpeg.MediaError, match="too long"):
+        ffmpeg.make_playback(tmp_path / "in", tmp_path / "out.mp4", _probe(), timeout=1)
+
+    assert time.monotonic() - started < 10

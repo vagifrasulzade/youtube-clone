@@ -14,7 +14,7 @@ import json
 import logging
 import shutil
 import subprocess
-import time
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +26,9 @@ FFPROBE = shutil.which("ffprobe") or "ffprobe"
 
 # ffprobe `format_name` values we accept (it reports e.g. "mov,mp4,m4a,3gp,3g2,mj2").
 ALLOWED_FORMATS = frozenset({"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm", "avi"})
+# Passed as -format_whitelist to every input: only these demuxers may open the file, so
+# concat/HLS/image demuxers never run on attacker bytes (security review L5).
+FORMAT_WHITELIST = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi"
 BROWSER_SAFE_VIDEO = frozenset({"h264"})
 BROWSER_SAFE_PIX_FMT = frozenset({"yuv420p", "yuvj420p"})
 BROWSER_SAFE_AUDIO = frozenset({"aac", "mp3"})
@@ -74,6 +77,7 @@ def probe(path: Path, *, timeout: int = 60) -> ProbeResult:
             FFPROBE,
             "-v", "error",
             "-protocol_whitelist", "file",
+            "-format_whitelist", FORMAT_WHITELIST,
             "-show_format",
             "-show_streams",
             "-of", "json",
@@ -140,6 +144,7 @@ def playback_command(src: Path, dst: Path, info: ProbeResult) -> list[str]:
         FFMPEG,
         "-hide_banner", "-nostdin", "-y", "-v", "error",
         "-protocol_whitelist", "file,pipe",
+        "-format_whitelist", FORMAT_WHITELIST,
         "-i", str(src),
         "-map", "0:v:0", "-map", "0:a:0?",
         "-sn", "-dn", "-map_metadata", "-1",
@@ -167,7 +172,6 @@ def make_playback(
 ) -> None:
     """Remux or transcode to a progressive MP4, reporting progress (0-99)."""
     cmd = playback_command(src, dst, info)
-    deadline = time.monotonic() + timeout
     stderr_path = dst.with_suffix(".stderr.log")
     with stderr_path.open("w") as stderr:
         process = subprocess.Popen(  # noqa: S603 - fixed binary, list args
@@ -175,23 +179,30 @@ def make_playback(
         )
         if process.stdout is None:  # cannot happen with stdout=PIPE; keeps type checkers happy
             raise MediaError("The video could not be converted")
-        last_reported = -1
-        for line in process.stdout:
-            if time.monotonic() > deadline:
-                process.kill()
-                process.wait()
-                raise MediaError("Processing the file took too long")
-            key, _, value = line.strip().partition("=")
-            if key == "out_time_us" and value.isdigit() and on_progress is not None:
-                percent = min(99, int(int(value) / 1_000_000 / info.duration * 100))
-                if percent > last_reported:
-                    last_reported = percent
-                    on_progress(percent)
-        try:
-            returncode = process.wait(timeout=max(1, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired as exc:
+        # A timer enforces the deadline even if ffmpeg stalls without printing anything
+        # (checking only between progress lines would never fire; security review L4).
+        timed_out = threading.Event()
+
+        def _kill() -> None:
+            timed_out.set()
             process.kill()
-            raise MediaError("Processing the file took too long") from exc
+
+        timer = threading.Timer(timeout, _kill)
+        timer.start()
+        try:
+            last_reported = -1
+            for line in process.stdout:
+                key, _, value = line.strip().partition("=")
+                if key == "out_time_us" and value.isdigit() and on_progress is not None:
+                    percent = min(99, int(int(value) / 1_000_000 / info.duration * 100))
+                    if percent > last_reported:
+                        last_reported = percent
+                        on_progress(percent)
+            returncode = process.wait()
+        finally:
+            timer.cancel()
+    if timed_out.is_set():
+        raise MediaError("Processing the file took too long")
     if returncode != 0:
         logger.warning("ffmpeg failed: %s", stderr_path.read_text()[-2000:])
         raise MediaError("The video could not be converted")
@@ -204,6 +215,7 @@ def extract_frame(src: Path, dst: Path, at_seconds: float, *, timeout: int = 60)
             FFMPEG,
             "-hide_banner", "-nostdin", "-y", "-v", "error",
             "-protocol_whitelist", "file",
+            "-format_whitelist", FORMAT_WHITELIST,
             "-ss", f"{max(0.0, at_seconds):.3f}",
             "-i", str(src),
             "-frames:v", "1",
