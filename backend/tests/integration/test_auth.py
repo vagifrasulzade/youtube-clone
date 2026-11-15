@@ -433,3 +433,14 @@ def test_a_login_cannot_be_refreshed_forever(client: TestClient, db_session: Ses
     )
 
     assert refresh_with(client, cookie).status_code == 401
+
+
+def test_login_sets_the_httponly_media_cookie_scoped_to_media(client: TestClient) -> None:
+    """Review M1: media URLs only act for the user together with this cookie."""
+    response = client.post(REGISTER, json=register_payload())
+
+    cookies = [c.lower() for c in response.headers.get_list("set-cookie")]
+    media = next(c for c in cookies if c.startswith("yt_media="))
+    assert "httponly" in media
+    assert "samesite=strict" in media
+    assert "path=/api/v1/media" in media

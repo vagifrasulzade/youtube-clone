@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     # Absolute lifetime of one login (token family), however often it is refreshed.
     refresh_family_max_age_days: int = Field(default=90, ge=1)
     refresh_cookie_name: str = "yt_refresh"
+    # Binds media URLs to the browser that obtained them (security review M1).
+    media_cookie_name: str = "yt_media"
     # True when served over HTTPS. Browsers drop Secure cookies on plain-HTTP origins.
     cookie_secure: bool = False
 
