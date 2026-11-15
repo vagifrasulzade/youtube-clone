@@ -50,6 +50,9 @@ After deployment, `scripts/smoke_test.sh` runs the scenario *register → login 
 - [Video storage](docs/video-storage.md): upload, processing and protected delivery
 - [Security](docs/security.md): threat model, auth, access policy, rate limits, hardening
 - [Plan](docs/plan.md): roadmap, testing strategy, git workflow, AI workflow
+- [Deployment](docs/deployment.md): prerequisites, what deploy.sh does, configuration, operations, troubleshooting
+- [Testing](docs/testing.md): how to run the suites, acceptance criteria mapped to tests
+- [AI workflow](docs/ai-workflow.md): agent setup, working loop, verification, reviews, what did not go to plan
 
 ## Development
 
@@ -80,4 +83,4 @@ deploy.sh     one-command deployment
 
 ## AI-assisted development
 
-Built with Claude Code acting as implementer while the developer acted as architect and reviewer. `CLAUDE.md` holds the project rules (layering, the single access policy, definition of done). `.claude/` holds the review subagents, the workflow skills and a lint hook. Every stage was planned, implemented with tests and reviewed (including a security review whose findings were fixed in `d36fc19`), then merged with `--no-ff` and tagged `stage-N`. The prompts are in `ai/prompts/`, and the raw session transcripts are added to `ai/sessions/`.
+Built with Claude Code acting as implementer while the developer acted as architect and reviewer. `CLAUDE.md` holds the project rules (layering, the single access policy, definition of done). `.claude/` holds the review subagents, the workflow skills and a lint hook. Every stage was planned, implemented with tests and reviewed (including a security review whose findings were fixed in `d36fc19`), then merged with `--no-ff` and tagged `stage-N`. The prompts are in `ai/prompts/`, and the raw session transcripts are added to `ai/sessions/` by `python scripts/package_submission.py`, which also builds the submission zip (with `.git`).
