@@ -21,5 +21,7 @@ services:
     environment:
       ENV: development
       LOG_JSON: "false"
+      # Reached directly on :8080 (no nginx in front), so stream media itself.
+      MEDIA_DELIVERY: proxy
     ports:
       - "127.0.0.1:${DEV_API_PORT:-8080}:8000"

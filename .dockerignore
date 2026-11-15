@@ -1,0 +1,11 @@
+# Build context for infra/nginx/Dockerfile is the repo root: keep it small and secret-free.
+.git/
+.env
+**/.env
+backend/
+ai/
+docs/
+scripts/
+**/node_modules/
+**/dist/
+**/__pycache__/
