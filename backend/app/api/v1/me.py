@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Response, status
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.v1.playlists import playlist_cards
 from app.schemas.pages import ChannelBrief, CursorPage, VideoCard
 from app.schemas.playlist import PlaylistCard
 from app.services import feeds, grants, subscriptions, views
@@ -50,4 +49,6 @@ def shared(user: CurrentUser, db: DbSession, limit: int = 50) -> list[VideoCard]
 
 @router.get("/playlists", summary="My playlists (for 'Save to playlist')")
 def my_playlists(user: CurrentUser, db: DbSession) -> list[PlaylistCard]:
-    return playlist_cards(db, playlist_service.channel_playlists(db, user.channel, user), user)
+    return playlist_service.build_cards(
+        db, playlist_service.channel_playlists(db, user.channel, user), user
+    )
