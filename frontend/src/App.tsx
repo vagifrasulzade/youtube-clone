@@ -1,6 +1,7 @@
 import { Link, Route, Routes } from 'react-router'
 
 import { AppLayout } from './components/layout/AppLayout'
+import { LoginPage, RegisterPage } from './pages/AuthPages'
 import { ChannelPage } from './pages/ChannelPage'
 import { HomePage } from './pages/HomePage'
 import { PlaylistPage } from './pages/PlaylistPage'
@@ -21,6 +22,8 @@ function NotBuiltYet() {
 export default function App() {
   return (
     <Routes>
+      <Route path="login" element={<LoginPage />} />
+      <Route path="register" element={<RegisterPage />} />
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="watch" element={<WatchPage />} />
