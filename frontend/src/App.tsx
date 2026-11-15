@@ -1,7 +1,10 @@
 import { Link, Route, Routes } from 'react-router'
 
 import { AppLayout } from './components/layout/AppLayout'
+import { ChannelPage } from './pages/ChannelPage'
 import { HomePage } from './pages/HomePage'
+import { SearchPage } from './pages/SearchPage'
+import { WatchPage } from './pages/WatchPage'
 
 function NotBuiltYet() {
   return (
@@ -19,6 +22,10 @@ export default function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
+        <Route path="watch" element={<WatchPage />} />
+        <Route path="results" element={<SearchPage />} />
+        {/* YouTube-style channel URLs: /@handle (validated inside the page). */}
+        <Route path=":segment" element={<ChannelPage />} />
         <Route path="*" element={<NotBuiltYet />} />
       </Route>
     </Routes>

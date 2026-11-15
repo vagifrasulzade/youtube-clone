@@ -1,26 +1,10 @@
 import { Link } from 'react-router'
 
 import type { components } from '../../api/schema'
+import { Avatar } from '../ui/Avatar'
+import { durationLabel } from './duration'
 
 export type Video = components['schemas']['VideoCard']
-
-function durationLabel(seconds: number | null | undefined): string {
-  if (seconds == null) return ''
-  const minutes = Math.floor(seconds / 60)
-  const rest = String(Math.round(seconds) % 60).padStart(2, '0')
-  return minutes >= 60
-    ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${rest}`
-    : `${minutes}:${rest}`
-}
-
-function Avatar({ name, url }: { name: string; url: string | null }) {
-  if (url) return <img src={url} alt="" className="size-9 shrink-0 rounded-full object-cover" />
-  return (
-    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#5c6bc0] text-sm font-medium text-white">
-      {name.charAt(0).toUpperCase()}
-    </div>
-  )
-}
 
 export function VideoCard({ video }: { video: Video }) {
   const watch = `/watch?v=${video.id}`
