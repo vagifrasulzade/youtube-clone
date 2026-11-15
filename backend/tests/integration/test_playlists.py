@@ -193,3 +193,28 @@ def test_third_party_unlisted_video_is_not_listed_through_a_public_playlist(
     assert "Unlisted talk" not in str(anonymous)
     assert as_creator[0]["video"]["id"] == unlisted.id  # its own creator still sees it
     assert unlisted.id not in str(cards)  # nor used as the public cover
+
+
+def test_playlist_size_limits(
+    client: TestClient, owner, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review L9: bounded playlists keep public playlist pages cheap."""
+    from app.services import playlists as service
+
+    monkeypatch.setattr(service, "MAX_ENTRIES_PER_PLAYLIST", 1)
+    monkeypatch.setattr(service, "MAX_PLAYLISTS_PER_CHANNEL", 1)
+    a, b = _video(db_session, owner.channel), _video(db_session, owner.channel)
+    playlist = _create(client, owner)
+    _add(client, owner, playlist["id"], a.id)
+
+    full = _add(client, owner, playlist["id"], b.id)
+    second = client.post(
+        "/api/v1/playlists",
+        json={"title": "Another", "visibility": "public"},
+        headers=auth_headers(owner),
+    )
+
+    assert full.status_code == 409
+    assert full.json()["error"]["code"] == "playlist_full"
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "too_many_playlists"

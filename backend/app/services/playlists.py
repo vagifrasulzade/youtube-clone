@@ -47,7 +47,17 @@ def get_owned(db: Session, playlist_id: uuid.UUID, user: User) -> Playlist:
     return playlist
 
 
+# Size caps keep anonymous playlist pages cheap to render (security review L9).
+MAX_PLAYLISTS_PER_CHANNEL = 200
+MAX_ENTRIES_PER_PLAYLIST = 5000
+
+
 def create(db: Session, user: User, *, title: str, description: str, visibility: Visibility):
+    existing = db.scalar(
+        select(func.count()).select_from(Playlist).where(Playlist.channel_id == user.channel.id)
+    )
+    if (existing or 0) >= MAX_PLAYLISTS_PER_CHANNEL:
+        raise ConflictError("You have reached the playlist limit", code="too_many_playlists")
     playlist = Playlist(
         channel_id=user.channel.id, title=title, description=description, visibility=visibility
     )
@@ -86,6 +96,13 @@ def entries(db: Session, playlist: Playlist) -> list[Video]:
 def add_video(db: Session, user: User, playlist_id: uuid.UUID, video_id: str) -> None:
     playlist = get_owned(db, playlist_id, user)
     video = access.get_viewable_video_or_404(db, video_id, user)  # only videos you can watch
+    size = db.scalar(
+        select(func.count())
+        .select_from(PlaylistVideo)
+        .where(PlaylistVideo.playlist_id == playlist.id)
+    )
+    if (size or 0) >= MAX_ENTRIES_PER_PLAYLIST:
+        raise ConflictError("This playlist is full", code="playlist_full")
     next_position = db.scalar(
         select(func.coalesce(func.max(PlaylistVideo.position) + 1, 0)).where(
             PlaylistVideo.playlist_id == playlist.id

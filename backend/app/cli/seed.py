@@ -40,7 +40,18 @@ from app.workers import ffmpeg
 
 logger = logging.getLogger("seed")
 
-DEMO_PASSWORD = "demo-password-123"  # noqa: S105 - documented demo credential
+# Local development only. Deployments get a random DEMO_PASSWORD from deploy.sh, and the
+# seed refuses to run in production without one (security review H1).
+DEV_DEMO_PASSWORD = "demo-password-123"  # noqa: S105 - development-only demo credential
+
+
+def demo_password() -> str | None:
+    settings = get_settings()
+    if settings.demo_password is not None and settings.demo_password.get_secret_value():
+        return settings.demo_password.get_secret_value()
+    return None if settings.env == "production" else DEV_DEMO_PASSWORD
+
+
 CLIP_SECONDS = 8
 
 USERS = [
@@ -117,14 +128,14 @@ def _store_media(video: Video, workdir: Path, source: str, frequency: int) -> No
     video.width, video.height = 1280, 720
 
 
-def seed(db: Session) -> bool:
+def seed(db: Session, password: str) -> bool:
     if db.scalar(select(User.id).where(User.email == USERS[0][0])) is not None:
         logger.info("Demo data already present; nothing to do")
         return False
 
     rng = random.Random(42)  # deterministic demo data  # noqa: S311
     now = datetime.now(UTC)
-    password_hash = hash_password(DEMO_PASSWORD)
+    password_hash = hash_password(password)
 
     users: dict[str, User] = {}
     for email, handle, name, role in USERS:
@@ -208,12 +219,13 @@ def seed(db: Session) -> bool:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    password = demo_password()
+    if password is None:
+        print("Refusing to seed: set DEMO_PASSWORD (deploy.sh generates one).", file=sys.stderr)
+        return 1
     with get_sessionmaker()() as db:
-        created = seed(db)
-    print(  # CLI output
-        "Demo data created." if created else "Demo data already present.",
-        f"Demo password for all accounts: {DEMO_PASSWORD}",
-    )
+        created = seed(db, password)
+    print("Demo data created." if created else "Demo data already present.")
     return 0
 
 
