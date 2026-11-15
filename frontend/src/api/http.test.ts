@@ -16,7 +16,10 @@ describe('getJson', () => {
     const data = await getJson('/videos', { limit: '24', cursor: 'a b' })
 
     expect(data).toEqual({ items: [], next_cursor: null })
-    expect(fetch).toHaveBeenCalledWith('/api/v1/videos?limit=24&cursor=a+b')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/videos?limit=24&cursor=a+b',
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 
   it('turns the API error envelope into an HttpError', async () => {

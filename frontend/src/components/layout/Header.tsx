@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
 
-import { CreateIcon, MenuIcon, PlayBadge, UserIcon } from '../icons'
+import { CreateIcon, MenuIcon, PlayBadge } from '../icons'
 import { SearchBox } from './SearchBox'
+import { UserMenu } from './UserMenu'
 
 interface HeaderProps {
   onToggleSidebar: () => void
@@ -35,13 +36,7 @@ export function Header({ onToggleSidebar }: HeaderProps) {
           <CreateIcon size={20} />
           Create
         </Link>
-        <Link
-          to="/login"
-          className="flex items-center gap-2 rounded-full border border-yt-border px-3 py-1.5 text-sm font-medium text-yt-blue hover:bg-[#def1ff]"
-        >
-          <UserIcon size={22} />
-          Sign in
-        </Link>
+        <UserMenu />
       </div>
     </header>
   )

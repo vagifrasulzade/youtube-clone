@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react'
 import { NavLink } from 'react-router'
 
+import { hasRole, useAuth } from '../../auth/context'
+
 import {
   ChannelIcon,
   HistoryIcon,
@@ -27,9 +29,11 @@ const YOU: NavItem[] = [
   { to: '/playlists', label: 'Playlists', icon: PlaylistIcon },
   { to: '/studio', label: 'Your videos', icon: ChannelIcon },
   { to: '/playlist/liked', label: 'Liked videos', icon: LikeIcon },
+  { to: '/feed/shared', label: 'Shared with you', icon: SubscriptionsIcon },
 ]
 
-const MORE: NavItem[] = [{ to: '/moderation', label: 'Moderation', icon: ShieldIcon }]
+const MODERATION: NavItem = { to: '/moderation', label: 'Moderation', icon: ShieldIcon }
+const ADMIN: NavItem = { to: '/admin', label: 'Admin', icon: ShieldIcon }
 
 function rowClass({ isActive }: { isActive: boolean }) {
   return `flex h-10 items-center gap-6 rounded-lg px-3 text-sm ${
@@ -53,11 +57,17 @@ function Section({ title, items }: { title?: string; items: NavItem[] }) {
 
 /** Full 240px guide (desktop expanded, and the mobile drawer). */
 export function Sidebar() {
+  const { user } = useAuth()
+  // Shown by role as a convenience only; the API enforces access on every request.
+  const staff = [
+    ...(hasRole(user, 'moderator') ? [MODERATION] : []),
+    ...(hasRole(user, 'admin') ? [ADMIN] : []),
+  ]
   return (
     <nav aria-label="Guide" className="w-60 overflow-y-auto px-3">
       <Section items={MAIN} />
       <Section title="You" items={YOU} />
-      <Section items={MORE} />
+      {staff.length > 0 && <Section items={staff} />}
       <p className="px-3 py-4 text-xs text-yt-muted">TubeClone, a YouTube-style demo</p>
     </nav>
   )

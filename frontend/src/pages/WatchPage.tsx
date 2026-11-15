@@ -1,13 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { HttpError, getJson, postJson } from '../api/http'
 import type { components } from '../api/schema'
-import { LikeIcon } from '../components/icons'
+import { CommentSection } from '../components/comments/CommentSection'
 import { Avatar } from '../components/ui/Avatar'
 import type { Video } from '../components/video/VideoCard'
 import { durationLabel } from '../components/video/duration'
+import { ReportButton, SaveToPlaylistButton } from '../components/watch/VideoMenus'
+import { ReactionButtons, SubscribeButton } from '../components/watch/WatchActions'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type VideoDetail = components['schemas']['VideoDetailOut']
 
@@ -71,6 +74,7 @@ export function WatchPage() {
   const [params] = useSearchParams()
   const id = params.get('v') ?? ''
   const counted = useRef<string | null>(null)
+  const queryClient = useQueryClient()
 
   const detail = useQuery({
     queryKey: ['video', id],
@@ -83,6 +87,8 @@ export function WatchPage() {
     queryFn: () => getJson<Video[]>(`/videos/${encodeURIComponent(id)}/related`, { limit: '20' }),
     enabled: detail.isSuccess,
   })
+
+  usePageTitle(detail.data?.title ?? (detail.isError ? 'Video unavailable' : null))
 
   if (id.length !== 11 || detail.isError) return <Unavailable />
   if (detail.isPending) {
@@ -137,29 +143,42 @@ export function WatchPage() {
                 {video.channel.subscriber_count.toLocaleString('en')} subscribers
               </p>
             </div>
-            <Link
-              to="/login"
-              className="ml-3 rounded-full bg-yt-text px-4 py-2 text-sm font-medium text-white hover:bg-[#272727]"
-            >
-              Subscribe
-            </Link>
+            <div className="ml-3">
+              {video.can_edit ? (
+                <Link
+                  to={`/studio/video/${video.id}`}
+                  className="rounded-full bg-yt-hover px-4 py-2 text-sm font-medium hover:bg-yt-active"
+                >
+                  Edit video
+                </Link>
+              ) : (
+                <SubscribeButton
+                  handle={video.channel.handle}
+                  subscribed={video.is_subscribed}
+                  onChange={(state) =>
+                    queryClient.setQueryData<VideoDetail>(['video', video.id], (old) =>
+                      old && {
+                        ...old,
+                        is_subscribed: state.subscribed,
+                        channel: { ...old.channel, subscriber_count: state.subscriber_count },
+                      },
+                    )
+                  }
+                />
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center rounded-full bg-yt-hover text-sm font-medium">
-            <Link to="/login" className="flex items-center gap-2 rounded-l-full px-4 py-2 hover:bg-yt-active">
-              <LikeIcon size={20} />
-              {video.like_count.toLocaleString('en')}
-            </Link>
-            <span className="h-6 w-px bg-yt-border" />
-            <Link to="/login" aria-label="Dislike" className="rounded-r-full px-4 py-2 hover:bg-yt-active">
-              <LikeIcon size={20} className="rotate-180" />
-            </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <ReactionButtons video={video} />
+            <SaveToPlaylistButton videoId={video.id} />
+            {!video.can_edit && <ReportButton videoId={video.id} />}
           </div>
         </div>
 
         <Description video={video} />
 
-        <h2 className="mt-6 text-xl font-bold">{video.comment_count.toLocaleString('en')} Comments</h2>
+        <CommentSection videoId={video.id} count={video.comment_count} />
       </section>
 
       <aside className="flex w-full flex-col gap-3 lg:w-[402px] lg:shrink-0">

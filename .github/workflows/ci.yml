@@ -59,6 +59,9 @@ jobs:
             -v "$PWD/infra/minio:/init:ro" --entrypoint /bin/sh \
             cgr.dev/chainguard/minio-client@sha256:e1f3f37e8b13f34be49494f441ca01ff7be4e05d7cf04bf26681b0fe380852e1 \
             /init/init.sh
+      # The processing tests run the real ffmpeg/ffprobe on generated clips.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

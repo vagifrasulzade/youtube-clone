@@ -24,7 +24,7 @@ def _lower(value: object) -> object:
 def _reject_control_chars(allowed: str) -> AfterValidator:
     def check(value: str) -> str:
         for char in value:
-            if unicodedata.category(char) in {"Cc", "Cf"} and char not in allowed:
+            if unicodedata.category(char) in {"Cc", "Cf", "Cs"} and char not in allowed:
                 raise ValueError("must not contain control characters")
         return value
 
@@ -35,7 +35,8 @@ def _reject_control_chars(allowed: str) -> AfterValidator:
 SingleLineText = Annotated[str, BeforeValidator(_strip), _reject_control_chars("")]
 
 # Multi-line text (descriptions, comments): newlines and tabs allowed.
-MultiLineText = Annotated[str, BeforeValidator(_strip), _reject_control_chars("\n\t\r")]
+# U+200D (zero-width joiner) builds emoji such as family and flag sequences.
+MultiLineText = Annotated[str, BeforeValidator(_strip), _reject_control_chars("\n\t\r\u200d")]
 
 Handle = Annotated[
     str,

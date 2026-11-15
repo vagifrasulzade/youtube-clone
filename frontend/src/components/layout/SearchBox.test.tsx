@@ -34,7 +34,10 @@ describe('SearchBox', () => {
     await user.type(screen.getByRole('combobox'), 'plov')
 
     expect(await screen.findByRole('option', { name: 'plov recipe' })).toBeTruthy()
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/search/suggestions?q=plov')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/search/suggestions?q=plov',
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 
   it('submits the typed query to the results page', async () => {

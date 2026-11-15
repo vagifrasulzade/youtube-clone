@@ -10,15 +10,15 @@
 | 2 Schema + foundation | `stage/2-backend-foundation` | ✅ merged, tag `stage-2` | migration up/down/up + `alembic check` in tests |
 | 3 Auth | `stage/3-auth` | ✅ merged, tag `stage-3` | security review: 0 critical/high, findings fixed in `d36fc19` |
 | 4 Storage + upload | `stage/4-storage` | ✅ merged, tag `stage-4` | presigned POST tests against real MinIO |
-| 5 Processing + streaming | `stage/5-processing` | ⏳ streaming, media tokens, ffmpeg wrapper, detail/delete done; **processing Celery task not written yet** | Range 206 via nginx verified |
-| 6 Interactions | `stage/6-interactions` | ⏳ reactions, subscriptions, feeds, views, history, grants, playlists, studio done; **comments API not written yet** | |
+| 5 Processing + streaming | `stage/5-processing` + `stage/8-frontend` | ✅ streaming, media tokens, ffmpeg wrapper, detail/delete, processing task (claim, probe, remux/transcode, thumbnails, publish, retries) | `scripts/smoke_test.sh` steps 1–6 through nginx; processing tests run real ffmpeg in Docker; code + security review fixed |
+| 6 Interactions | `stage/6-interactions` + `stage/8-frontend` | ✅ reactions, subscriptions, feeds, views, history, grants, playlists, studio, comments + replies (D2, audited staff deletes) | `scripts/smoke_test.sh` passes all 7 steps; code + security review fixed |
 | 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
 | 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
-| 8 Frontend | `stage/8-frontend` | ⏳ dependencies + generated API types | |
+| 8 Frontend | `stage/8-frontend` | ✅ all screens: home, watch (like, subscribe, comments, save, report), search, channel, playlist, sign-in/register, upload, Studio, library, moderation, admin | Vitest 34 passing, production build in the nginx image, all routes served, smoke test end to end |
 
-Tests: 327 passing (backend), CI green on `stage/10-deployment`.
+Tests: 407 passing (backend, Docker with ffmpeg), 34 passing (frontend).
 
-Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register, login, presigned upload + upload-complete). Step 4 waits because the processing task is missing.
+Smoke test (`scripts/smoke_test.sh`, through nginx): all 7 steps pass (register → login → upload → process → watch 206 → like → comment), and a copied media link without the cookie is refused (404).
 
 ### Deviations from the design (and why)
 
@@ -30,6 +30,8 @@ Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register,
 | `httpx` test transport | `httpx2` | Starlette deprecation in the pinned version |
 | Change-password returns 204 | returns new tokens (200) | It signs out every other session, so the caller needs a fresh session |
 | Dev ports 5432/8000 | 5433/6380/8080 | Clashed with local installs on the dev machine |
+| One branch per stage | Processing task and comments API committed on `stage/8-frontend` | The stage branches are stacked (5 → 6 → 10 → 8) and the security-review fixes (incl. the ffmpeg hardening) exist only at the top; building on `stage/5` would have meant the unhardened wrapper and merge conflicts |
+| Worker scratch in tmpfs `/tmp` (4 GB) | Disk-backed volume `worker-scratch` | tmpfs counts against the worker's 2 GB memory limit: a large upload would be OOM-killed |
 
 ## 1. Roadmap (10 days)
 

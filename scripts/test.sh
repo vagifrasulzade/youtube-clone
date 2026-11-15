@@ -10,6 +10,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PROJECT="youtube-clone-test"
+# Its own subnet: the main stack's 172.30.250.0/24 may be in use (overlapping pools fail).
+export APP_SUBNET="${TEST_APP_SUBNET:-172.30.251.0/24}" NGINX_IP="${TEST_NGINX_IP:-172.30.251.10}"
 compose() { docker compose -p "$PROJECT" --profile test "$@"; }
 trap 'compose down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
 

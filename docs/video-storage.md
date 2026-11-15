@@ -97,7 +97,7 @@ stateDiagram-v2
 
 ## 4. Processing pipeline (worker)
 
-1. Download `yt-uploads/{id}/source` to a per-task temp directory, which is always deleted afterwards.
+1. Download `yt-uploads/{id}/source` to a per-task directory on the worker's scratch volume (`PROCESSING_WORKDIR`, `/scratch` in compose). It is deleted after the task; leftovers of a killed worker are purged at start-up and by the watchdog.
 2. **Probe**: `ffprobe -v error -protocol_whitelist file -show_format -show_streams -of json <file>`. Reject if the format is not in the allowlist (`mov,mp4,m4a,3gp`, `matroska,webm`, `avi`), there is no video stream, or the duration is above the limit.
 3. **Playback file**:
    - If the source is already browser-safe (H.264 `yuv420p` video + AAC/no audio), **remux** with `-c copy -movflags +faststart`. This takes seconds and loses no quality.

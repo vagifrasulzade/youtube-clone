@@ -9,6 +9,14 @@ STRONG_A = "a" * 48
 STRONG_B = "b" * 48
 
 
+@pytest.fixture(autouse=True)
+def _no_process_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the values passed below count: containers (scripts/test.sh) export real
+    secrets such as JWT_SECRET, which would otherwise satisfy the production checks."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 def _settings(**values: str) -> Settings:
     values.setdefault("s3_secret_key", "a-real-storage-secret")
     return Settings(_env_file=None, **values)  # type: ignore[call-arg]

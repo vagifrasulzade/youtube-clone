@@ -79,8 +79,12 @@ done
 
 step 5 "watch: detail + Range request returns 206"
 STREAM="$(curl -fsS -H "$AUTH" "${API}/videos/${VIDEO_ID}" | json 'd["stream_url"]')"
-CODE="$(curl -s -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-1023' "${BASE_URL}${STREAM}")"
+# Like a browser: the yt_media cookie from login goes along with the media request.
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -b "$WORK/cookies" -H 'Range: bytes=0-1023'   "${BASE_URL}${STREAM}")"
 [ "$CODE" = 206 ] || fail "expected 206 for a Range request, got ${CODE}"
+# The same link copied elsewhere (no cookie) must not play.
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-1023' "${BASE_URL}${STREAM}")"
+[ "$CODE" = 404 ] || fail "a copied media link without the cookie returned ${CODE}, expected 404"
 
 step 6 "like"
 LIKES="$(curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d '{"value":"like"}' \

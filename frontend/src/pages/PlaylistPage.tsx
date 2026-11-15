@@ -5,6 +5,7 @@ import { getJson } from '../api/http'
 import type { components } from '../api/schema'
 import { Avatar } from '../components/ui/Avatar'
 import { durationLabel } from '../components/video/duration'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type Playlist = components['schemas']['PlaylistOut']
 type Entry = components['schemas']['PlaylistEntry']
@@ -56,6 +57,8 @@ export function PlaylistPage() {
     enabled: UUID_RE.test(id),
     retry: false,
   })
+
+  usePageTitle(playlist.data?.title ?? null)
 
   if (!UUID_RE.test(id) || playlist.isError) {
     return (

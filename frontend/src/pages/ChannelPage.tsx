@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -7,6 +7,8 @@ import type { components } from '../api/schema'
 import { PlaylistIcon } from '../components/icons'
 import { Avatar } from '../components/ui/Avatar'
 import { type Video, VideoCard, VideoCardSkeleton } from '../components/video/VideoCard'
+import { SubscribeButton } from '../components/watch/WatchActions'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type Channel = components['schemas']['ChannelPageOut']
 type PlaylistCard = components['schemas']['PlaylistCard']
@@ -33,7 +35,7 @@ function VideosTab({ handle }: { handle: string }) {
   const videos = useInfiniteQuery({
     queryKey: ['channel-videos', handle, sort],
     queryFn: ({ pageParam }) =>
-      getJson<VideoPage>(`/channels/${handle}/videos`, {
+      getJson<VideoPage>(`/channels/${encodeURIComponent(handle)}/videos`, {
         sort,
         limit: '30',
         ...(pageParam ? { cursor: pageParam } : {}),
@@ -86,7 +88,7 @@ function VideosTab({ handle }: { handle: string }) {
 function PlaylistsTab({ handle }: { handle: string }) {
   const playlists = useQuery({
     queryKey: ['channel-playlists', handle],
-    queryFn: () => getJson<PlaylistCard[]>(`/channels/${handle}/playlists`),
+    queryFn: () => getJson<PlaylistCard[]>(`/channels/${encodeURIComponent(handle)}/playlists`),
   })
   if (playlists.isSuccess && playlists.data.length === 0) {
     return <p className="py-16 text-center text-yt-muted">No playlists yet.</p>
@@ -116,6 +118,7 @@ export function ChannelPage() {
   const { segment = '' } = useParams()
   const handle = segment.startsWith('@') ? segment.slice(1).toLowerCase() : ''
   const [tab, setTab] = useState<'videos' | 'playlists'>('videos')
+  const queryClient = useQueryClient()
 
   const channel = useQuery({
     queryKey: ['channel', handle],
@@ -123,6 +126,8 @@ export function ChannelPage() {
     enabled: handle.length >= 3,
     retry: false,
   })
+
+  usePageTitle(channel.data?.name ?? null)
 
   if (!handle || channel.isError) return <NotFound />
   if (channel.isPending) return <div className="m-6 h-40 animate-pulse rounded-xl bg-yt-hover" />
@@ -145,14 +150,23 @@ export function ChannelPage() {
             {c.subscriber_count.toLocaleString('en')} subscribers · {c.video_count} videos
           </p>
           {c.description && <p className="mt-2 line-clamp-1 text-sm text-yt-muted">{c.description}</p>}
-          {!c.is_owner && (
-            <Link
-              to="/login"
-              className="mt-3 inline-block rounded-full bg-yt-text px-4 py-2 text-sm font-medium text-white hover:bg-[#272727]"
-            >
-              Subscribe
-            </Link>
-          )}
+          <div className="mt-3">
+            {c.is_owner ? (
+              <Link to="/studio" className="rounded-full bg-yt-hover px-4 py-2 text-sm font-medium hover:bg-yt-active">
+                Manage videos
+              </Link>
+            ) : (
+              <SubscribeButton
+                handle={c.handle}
+                subscribed={c.is_subscribed}
+                onChange={(state) =>
+                  queryClient.setQueryData<Channel>(['channel', handle], (old) =>
+                    old && { ...old, is_subscribed: state.subscribed, subscriber_count: state.subscriber_count },
+                  )
+                }
+              />
+            )}
+          </div>
         </div>
       </div>
 

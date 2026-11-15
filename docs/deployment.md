@@ -43,14 +43,14 @@ BASE_URL=http://<host>:<port> scripts/smoke_test.sh
 |---|---|---|
 | `nginx` | SPA, reverse proxy, upload pass-through to MinIO, X-Accel media delivery, security headers | `HTTP_PORT` (80) |
 | `api` | FastAPI (uvicorn, 2 workers) | internal |
-| `worker` | Celery worker (media processing, object deletion) | internal |
+| `worker` | Celery worker (media processing, object deletion), scratch volume `worker-scratch` | internal |
 | `beat` | Celery scheduler (stale-draft cleanup, watchdog) | internal |
 | `migrate`, `minio-init` | one-shot setup jobs | — |
 | `postgres` | PostgreSQL 17, volume `postgres-data` | internal |
 | `redis` | queue, rate limits, view dedupe (ephemeral) | internal |
 | `minio` | object storage, volume `minio-data` | internal |
 
-The internal network uses the fixed subnet `172.30.250.0/24`, with nginx at `172.30.250.10`. The API trusts `X-Forwarded-For` only from that address.
+The internal network uses the fixed subnet `172.30.250.0/24`, with nginx at `172.30.250.10`. The API trusts `X-Forwarded-For` only from that address. Both can be changed with `APP_SUBNET` and `NGINX_IP` in `.env`.
 
 ## Configuration (`.env`)
 
@@ -86,7 +86,7 @@ Backups: `docker compose exec postgres pg_dump -U youtube youtube > backup.sql`,
 | Symptom | Fix |
 |---|---|
 | `port is already allocated` for 80 | Set `HTTP_PORT=8080` in `.env`, then re-run `./deploy.sh` |
-| `Pool overlaps with other one on this address space` | Another network uses `172.30.250.0/24`. Change the subnet and `FORWARDED_ALLOW_IPS`/`ipv4_address` in `docker-compose.yml` |
+| `Pool overlaps with other one on this address space` | Another network uses `172.30.250.0/24`. Set `APP_SUBNET` and `NGINX_IP` (an address inside it) in `.env` |
 | `permission denied ... docker.sock` | Re-run with `sudo`, or add the user to the `docker` group and log in again |
 | First build is slow | Base images and packages are downloaded once; later runs are cached |
 | Storage image cannot be pulled | Upstream MinIO no longer publishes community images. The stack uses Chainguard's source build pinned by digest. Set `MINIO_IMAGE`/`MINIO_CLIENT_IMAGE` to another S3-compatible MinIO build if needed |

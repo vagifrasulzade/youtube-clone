@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     max_banner_bytes: int = Field(default=6 * 1024**2, ge=1024)
     max_thumbnail_bytes: int = Field(default=2 * 1024**2, ge=1024)
 
+    # --- video processing (docs/video-storage.md § 4) ---
+    # Parent directory of the worker's per-task temp dirs (None: the system default).
+    # Production uses a disk-backed volume: a tmpfs would count against the worker's
+    # memory limit, and a 2 GiB upload plus its output would not fit.
+    processing_workdir: str | None = None
+    processing_timeout_seconds: int = Field(default=25 * 60, ge=10)  # < 30 min soft limit
+
     # --- media delivery (docs/video-storage.md § 5) ---
     # accel: FastAPI authorizes, nginx streams from MinIO (X-Accel-Redirect) - production.
     # proxy: FastAPI streams from MinIO itself (dev/tests without nginx). Same authz path.
