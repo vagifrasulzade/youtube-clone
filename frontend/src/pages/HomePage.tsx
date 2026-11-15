@@ -2,6 +2,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 
 import { type Video, VideoCard, VideoCardSkeleton } from '../components/video/VideoCard'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 interface FeedPage {
   items: Video[]
@@ -19,6 +20,7 @@ async function fetchFeed(cursor: string | null): Promise<FeedPage> {
 const GRID = 'grid gap-x-4 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[2200px]:grid-cols-5'
 
 export function HomePage() {
+  usePageTitle(null)
   const feed = useInfiniteQuery({
     queryKey: ['feed', 'home'],
     queryFn: ({ pageParam }) => fetchFeed(pageParam),

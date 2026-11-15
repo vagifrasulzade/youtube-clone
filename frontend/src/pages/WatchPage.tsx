@@ -8,6 +8,7 @@ import { LikeIcon } from '../components/icons'
 import { Avatar } from '../components/ui/Avatar'
 import type { Video } from '../components/video/VideoCard'
 import { durationLabel } from '../components/video/duration'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type VideoDetail = components['schemas']['VideoDetailOut']
 
@@ -83,6 +84,8 @@ export function WatchPage() {
     queryFn: () => getJson<Video[]>(`/videos/${encodeURIComponent(id)}/related`, { limit: '20' }),
     enabled: detail.isSuccess,
   })
+
+  usePageTitle(detail.data?.title ?? (detail.isError ? 'Video unavailable' : null))
 
   if (id.length !== 11 || detail.isError) return <Unavailable />
   if (detail.isPending) {

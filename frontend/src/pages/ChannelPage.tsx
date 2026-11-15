@@ -7,6 +7,7 @@ import type { components } from '../api/schema'
 import { PlaylistIcon } from '../components/icons'
 import { Avatar } from '../components/ui/Avatar'
 import { type Video, VideoCard, VideoCardSkeleton } from '../components/video/VideoCard'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 type Channel = components['schemas']['ChannelPageOut']
 type PlaylistCard = components['schemas']['PlaylistCard']
@@ -123,6 +124,8 @@ export function ChannelPage() {
     enabled: handle.length >= 3,
     retry: false,
   })
+
+  usePageTitle(channel.data?.name ?? null)
 
   if (!handle || channel.isError) return <NotFound />
   if (channel.isPending) return <div className="m-6 h-40 animate-pulse rounded-xl bg-yt-hover" />

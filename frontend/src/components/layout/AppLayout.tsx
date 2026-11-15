@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router'
 
+import { ErrorBoundary } from '../ErrorBoundary'
 import { Header } from './Header'
 import { MiniSidebar, Sidebar } from './Sidebar'
 
@@ -53,7 +54,9 @@ export function AppLayout() {
       )}
 
       <main className={`pt-14 ${showFull ? 'sm:pl-60' : 'sm:pl-[72px]'}`}>
-        <Outlet />
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   )

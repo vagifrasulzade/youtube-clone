@@ -5,6 +5,7 @@ import { getJson } from '../api/http'
 import { Avatar } from '../components/ui/Avatar'
 import type { Video } from '../components/video/VideoCard'
 import { durationLabel } from '../components/video/duration'
+import { usePageTitle } from '../hooks/usePageTitle'
 
 interface SearchPage {
   items: Video[]
@@ -60,6 +61,7 @@ export function SearchPage() {
   const q = (params.get('search_query') ?? '').trim()
   const sort = params.get('sort') ?? 'relevance'
   const page = Math.max(1, Number(params.get('page') ?? '1') || 1)
+  usePageTitle(q || 'Search')
 
   const results = useQuery({
     queryKey: ['search', q, sort, page],
