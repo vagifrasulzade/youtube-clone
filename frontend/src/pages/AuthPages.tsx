@@ -3,13 +3,9 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import { describeError } from '../api/http'
 import { useAuth } from '../auth/context'
+import { safeNext } from '../auth/redirect'
 import { PlayBadge } from '../components/icons'
 import { usePageTitle } from '../hooks/usePageTitle'
-
-/** Only same-site paths: `?next=https://evil.example` must not become an open redirect. */
-function safeNext(value: unknown): string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/'
-}
 
 function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (

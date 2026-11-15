@@ -8,6 +8,7 @@ import { CommentSection } from '../components/comments/CommentSection'
 import { Avatar } from '../components/ui/Avatar'
 import type { Video } from '../components/video/VideoCard'
 import { durationLabel } from '../components/video/duration'
+import { ReportButton, SaveToPlaylistButton } from '../components/watch/VideoMenus'
 import { ReactionButtons, SubscribeButton } from '../components/watch/WatchActions'
 import { usePageTitle } from '../hooks/usePageTitle'
 
@@ -168,7 +169,11 @@ export function WatchPage() {
             </div>
           </div>
 
-          <ReactionButtons video={video} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ReactionButtons video={video} />
+            <SaveToPlaylistButton videoId={video.id} />
+            {!video.can_edit && <ReportButton videoId={video.id} />}
+          </div>
         </div>
 
         <Description video={video} />
