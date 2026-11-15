@@ -14,9 +14,9 @@
 | 6 Interactions | `stage/6-interactions` | ⏳ reactions, subscriptions, feeds, views, history, grants, playlists, studio done; **comments API not written yet** | |
 | 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
 | 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
-| 8 Frontend | `stage/8-frontend` | ⏳ dependencies + generated API types | |
+| 8 Frontend | `stage/8-frontend` | ⏳ public screens done: home, watch, search (+ suggestions), channel, playlist, page titles, error boundary; **sign-in, upload, Studio, moderation/admin screens and like/subscribe/comment actions not written yet** | Vitest 17 passing, CI frontend job |
 
-Tests: 327 passing (backend), CI green on `stage/10-deployment`.
+Tests: 346 passing (backend), 17 passing (frontend); CI green.
 
 Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register, login, presigned upload + upload-complete). Step 4 waits because the processing task is missing.
 
