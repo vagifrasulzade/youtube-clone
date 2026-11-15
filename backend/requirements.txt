@@ -19,4 +19,7 @@ PyJWT==2.15.1
 boto3==1.44.3
 redis==8.1.0
 celery==5.7.0
+# kombu's Redis transport imports `packaging` without declaring it; without this the
+# worker crashes in the slim runtime image (dev envs get it via pytest, hiding the bug).
+packaging==26.3
 pillow==13.0.0

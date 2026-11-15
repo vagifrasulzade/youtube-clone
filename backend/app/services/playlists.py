@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.models import Channel, Playlist, PlaylistVideo, User, Video
 from app.models.enums import Visibility
+from app.schemas.pages import ChannelBrief, VideoCard
+from app.schemas.playlist import PlaylistCard, PlaylistEntry, PlaylistOut
 from app.services import access
 
 
@@ -146,3 +148,47 @@ def video_counts(db: Session, playlist_ids: list[uuid.UUID]) -> dict[uuid.UUID, 
         .group_by(PlaylistVideo.playlist_id)
     )
     return {row[0]: row[1] for row in rows}
+
+
+# --- response builders (apply the access policy to every entry) -------------
+
+
+def build_detail(db: Session, playlist: Playlist, viewer: User | None) -> PlaylistOut:
+    channel = db.get(Channel, playlist.channel_id)
+    items: list[PlaylistEntry] = []
+    for position, video in enumerate(entries(db, playlist)):
+        visible = access.can_view(db, video, viewer)
+        items.append(
+            PlaylistEntry(
+                position=position,
+                video=VideoCard.from_model(video, viewer) if visible else None,
+                title=video.title if visible else "Private video",
+            )
+        )
+    return PlaylistOut(
+        id=playlist.id,
+        title=playlist.title,
+        description=playlist.description,
+        visibility=playlist.visibility,
+        channel=ChannelBrief.from_model(channel),
+        is_owner=viewer is not None and channel.user_id == viewer.id,
+        entries=items,
+    )
+
+
+def build_cards(db: Session, items: list[Playlist], viewer: User | None) -> list[PlaylistCard]:
+    counts = video_counts(db, [p.id for p in items])
+    result = []
+    for playlist in items:
+        first = next((v for v in entries(db, playlist) if access.can_view(db, v, viewer)), None)
+        result.append(
+            PlaylistCard(
+                id=playlist.id,
+                title=playlist.title,
+                visibility=playlist.visibility,
+                video_count=counts.get(playlist.id, 0),
+                thumbnail_url=VideoCard.from_model(first, viewer).thumbnail_url if first else None,
+                updated_at=playlist.updated_at,
+            )
+        )
+    return result

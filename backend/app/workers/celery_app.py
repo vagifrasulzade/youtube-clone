@@ -17,4 +17,11 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,  # CPU-heavy tasks: take one at a time
     broker_connection_retry_on_startup=True,
     timezone="UTC",
+    beat_schedule={
+        "cleanup-stale-drafts": {
+            "task": "app.workers.tasks.cleanup_stale_drafts",
+            "schedule": 3600.0,
+        },
+        "watchdog": {"task": "app.workers.tasks.watchdog", "schedule": 300.0},
+    },
 )

@@ -52,6 +52,16 @@ def test_tolerates_typos_via_trigrams(client: TestClient, db_session: Session) -
     assert _ids(client.get("/api/v1/search", params={"q": "plof recipe"})) == [plov.id]
 
 
+def test_tolerates_typos_in_long_titles(client: TestClient, db_session: Session) -> None:
+    """Regression: plain similarity() missed this on the real demo titles."""
+    plov = _video(db_session, "Azerbaijani plov recipe step by step")
+    python = _video(db_session, "Learn Python in 10 minutes")
+    _video(db_session, "Top 10 hidden places in the Caucasus")
+
+    assert _ids(client.get("/api/v1/search", params={"q": "plof"})) == [plov.id]
+    assert _ids(client.get("/api/v1/search", params={"q": "pyton"})) == [python.id]
+
+
 def test_matches_any_language(client: TestClient, db_session: Session) -> None:
     az = _video(db_session, "Bakı küçələri gecə")  # noqa: RUF001 - real Azerbaijani text
     ru = _video(db_session, "Рецепт плова")
