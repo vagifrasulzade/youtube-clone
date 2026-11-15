@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router'
 import { AppLayout } from './components/layout/AppLayout'
 import { ChannelPage } from './pages/ChannelPage'
 import { HomePage } from './pages/HomePage'
+import { PlaylistPage } from './pages/PlaylistPage'
 import { SearchPage } from './pages/SearchPage'
 import { WatchPage } from './pages/WatchPage'
 
@@ -24,6 +25,7 @@ export default function App() {
         <Route index element={<HomePage />} />
         <Route path="watch" element={<WatchPage />} />
         <Route path="results" element={<SearchPage />} />
+        <Route path="playlist" element={<PlaylistPage />} />
         {/* YouTube-style channel URLs: /@handle (validated inside the page). */}
         <Route path=":segment" element={<ChannelPage />} />
         <Route path="*" element={<NotBuiltYet />} />
