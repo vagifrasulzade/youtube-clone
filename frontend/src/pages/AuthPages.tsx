@@ -1,10 +1,10 @@
-import { type FormEvent, type ReactNode, useState } from 'react'
+import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import { describeError } from '../api/http'
 import { useAuth } from '../auth/context'
 import { safeNext } from '../auth/redirect'
-import { PlayBadge } from '../components/icons'
+import { EyeIcon, EyeOffIcon, PlayBadge } from '../components/icons'
 import { usePageTitle } from '../hooks/usePageTitle'
 
 function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
@@ -35,18 +35,41 @@ function Field(props: {
   maxLength?: number
   pattern?: string
 }) {
-  const { label, onChange, hint, ...input } = props
+  const { label, onChange, hint, type, ...input } = props
+  const id = useId()
+  const isPassword = type === 'password'
+  const [visible, setVisible] = useState(false)
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium">{label}</span>
-      <input
-        {...input}
-        required
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-yt-border px-3 py-2.5 outline-none focus:border-yt-blue focus:ring-1 focus:ring-yt-blue"
-      />
+    <div>
+      <label htmlFor={id} className="mb-1 block text-sm font-medium">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          {...input}
+          id={id}
+          type={isPassword && visible ? 'text' : type}
+          required
+          onChange={(event) => onChange(event.target.value)}
+          className={`w-full rounded-md border border-yt-border px-3 py-2.5 outline-none focus:border-yt-blue focus:ring-1 focus:ring-yt-blue ${
+            isPassword ? 'pr-11' : ''
+          }`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? 'Hide password' : 'Show password'}
+            aria-pressed={visible}
+            aria-controls={id}
+            className="absolute inset-y-0 right-1 my-auto flex size-9 items-center justify-center rounded-full text-yt-muted hover:bg-yt-hover hover:text-yt-text"
+          >
+            {visible ? <EyeOffIcon size={20} /> : <EyeIcon size={20} />}
+          </button>
+        )}
+      </div>
       {hint && <span className="mt-1 block text-xs text-yt-muted">{hint}</span>}
-    </label>
+    </div>
   )
 }
 
