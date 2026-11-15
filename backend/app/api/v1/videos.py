@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+import uuid
+
+from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
 from redis.exceptions import RedisError
 
 from app.api.deps import CurrentUser, DbSession, OptionalUser, RedisClient
 from app.core import rate_limit
+from app.schemas.moderation import ReportCreate, ReportOut
+from app.schemas.pages import CursorPage, VideoCard
 from app.schemas.video import (
+    GrantOut,
+    GrantRequest,
+    ReactionOut,
+    ReactionRequest,
     UploadCreatedOut,
     UploadPolicyOut,
     UploadRequest,
@@ -16,7 +24,7 @@ from app.schemas.video import (
     VideoStatusOut,
     VideoUpdateRequest,
 )
-from app.services import access, uploads
+from app.services import access, feeds, grants, moderation, reactions, uploads, views
 from app.services import videos as video_service
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -92,6 +100,22 @@ def update_video(
     return VideoOwnerOut.from_model(video)
 
 
+@router.get("", summary="Home feed (public videos, newest first)")
+def home_feed(
+    viewer: OptionalUser, db: DbSession, cursor: str | None = None, limit: int = 24
+) -> CursorPage[VideoCard]:
+    items, next_cursor = feeds.home_feed(db, cursor, limit)
+    return CursorPage(
+        items=[VideoCard.from_model(v, viewer) for v in items], next_cursor=next_cursor
+    )
+
+
+@router.get("/{video_id}/related", summary="Related videos for the watch page")
+def related(video_id: str, viewer: OptionalUser, db: DbSession, limit: int = 20) -> list[VideoCard]:
+    video = access.get_viewable_video_or_404(db, video_id, viewer)
+    return [VideoCard.from_model(v, viewer) for v in feeds.related_videos(db, video, limit)]
+
+
 @router.get("/{video_id}", summary="Watch page details (404 if you may not see it)")
 def get_video(video_id: str, viewer: OptionalUser, db: DbSession) -> VideoDetailOut:
     video = access.get_viewable_video_or_404(db, video_id, viewer)
@@ -126,3 +150,80 @@ def upload_thumbnail(
 def delete_video(video_id: str, user: CurrentUser, db: DbSession) -> Response:
     video_service.delete_video(db, video_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{video_id}/reaction", summary="Like or dislike (idempotent)")
+def set_reaction(
+    video_id: str, body: ReactionRequest, user: CurrentUser, db: DbSession
+) -> ReactionOut:
+    video = reactions.set_reaction(db, user, video_id, body.value)
+    return ReactionOut(
+        like_count=video.like_count, dislike_count=video.dislike_count, my_reaction=body.value
+    )
+
+
+@router.delete("/{video_id}/reaction", summary="Remove my like/dislike (idempotent)")
+def remove_reaction(video_id: str, user: CurrentUser, db: DbSession) -> ReactionOut:
+    video = reactions.remove_reaction(db, user, video_id)
+    return ReactionOut(
+        like_count=video.like_count, dislike_count=video.dislike_count, my_reaction=None
+    )
+
+
+@router.post(
+    "/{video_id}/views",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Count a view (at most once per viewer per 24 h)",
+    dependencies=[Depends(rate_limit.limit_by_ip("views", limit=120, window_seconds=60))],
+)
+def record_view(
+    video_id: str, request: Request, viewer: OptionalUser, db: DbSession, redis: RedisClient
+) -> dict[str, bool]:
+    counted = views.record_view(db, redis, video_id, viewer, rate_limit.client_ip(request))
+    return {"counted": counted}
+
+
+@router.get("/{video_id}/permissions", summary="Who may watch this private video (owner)")
+def list_permissions(video_id: str, user: CurrentUser, db: DbSession) -> list[GrantOut]:
+    return [
+        GrantOut(user_id=p.user_id, handle=c.handle, name=c.name, granted_at=p.created_at)
+        for p, c in grants.list_grants(db, user, video_id)
+    ]
+
+
+@router.post(
+    "/{video_id}/permissions",
+    status_code=status.HTTP_201_CREATED,
+    summary="Allow a user (by handle) to watch this private video (owner)",
+)
+def add_permission(
+    video_id: str, body: GrantRequest, user: CurrentUser, db: DbSession
+) -> dict[str, str]:
+    grantee = grants.grant(db, user, video_id, body.handle)
+    return {"handle": grantee.handle}
+
+
+@router.delete(
+    "/{video_id}/permissions/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoke access (effective on the next request)",
+)
+def remove_permission(
+    video_id: str, user_id: uuid.UUID, user: CurrentUser, db: DbSession
+) -> Response:
+    grants.revoke(db, user, video_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{video_id}/reports",
+    status_code=status.HTTP_201_CREATED,
+    summary="Report a video (one open report per user and video)",
+)
+def report_video(
+    video_id: str, body: ReportCreate, user: CurrentUser, db: DbSession, redis: RedisClient
+) -> ReportOut:
+    rate_limit.hit(redis, f"report:user:{user.id}", limit=20, window_seconds=3600)
+    return ReportOut.from_model(
+        moderation.create_report(db, user, video_id, body.reason, body.details)
+    )

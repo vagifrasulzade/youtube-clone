@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.errors import ConflictError, ForbiddenError
 from app.models import Subscription, User, Video, VideoReaction
-from app.models.enums import RoleName
+from app.models.enums import ModerationActionType, ModerationTargetType, RoleName
 from app.services import access, images
 from app.storage import keys, s3
 from app.workers import queue
@@ -63,8 +63,16 @@ def upload_custom_thumbnail(db: Session, video: Video, stream: BinaryIO) -> Vide
 def delete_video(db: Session, video_id: str, user: User) -> None:
     """Owner, or an admin, may delete. Moderators hide instead (stage 7)."""
     video = access.get_viewable_video_or_404(db, video_id, user)
-    if not (access.is_owner(video, user) or access.has_role(user, RoleName.ADMIN)):
+    is_owner = access.is_owner(video, user)
+    if not (is_owner or access.has_role(user, RoleName.ADMIN)):
         raise ForbiddenError("Only the owner or an admin can delete this video", code="not_owner")
+    if not is_owner:  # an admin removing someone else's video is a moderation action
+        from app.services.moderation import audit
+
+        audit(
+            db, user, ModerationActionType.DELETE_VIDEO, ModerationTargetType.VIDEO, video.id,
+            details={"title": video.title, "channel_id": str(video.channel_id)},
+        )  # fmt: skip
     db.delete(video)  # rows attached to the video go with it (ON DELETE CASCADE)
     db.commit()
     # Objects are removed asynchronously after commit; the task is idempotent.
