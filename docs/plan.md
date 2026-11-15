@@ -10,7 +10,7 @@
 | 2 Schema + foundation | `stage/2-backend-foundation` | ✅ merged, tag `stage-2` | migration up/down/up + `alembic check` in tests |
 | 3 Auth | `stage/3-auth` | ✅ merged, tag `stage-3` | security review: 0 critical/high, findings fixed in `d36fc19` |
 | 4 Storage + upload | `stage/4-storage` | ✅ merged, tag `stage-4` | presigned POST tests against real MinIO |
-| 5 Processing + streaming | `stage/5-processing` | ⏳ streaming, media tokens, ffmpeg wrapper, detail/delete done; **processing Celery task not written yet** | Range 206 via nginx verified |
+| 5 Processing + streaming | `stage/5-processing` + `stage/8-frontend` | ✅ streaming, media tokens, ffmpeg wrapper, detail/delete, processing task (claim, probe, remux/transcode, thumbnails, publish, retries) | `scripts/smoke_test.sh` steps 1–6 through nginx; processing tests run real ffmpeg in Docker; code + security review fixed |
 | 6 Interactions | `stage/6-interactions` | ⏳ reactions, subscriptions, feeds, views, history, grants, playlists, studio done; **comments API not written yet** | |
 | 7 Search + moderation | (in `stage/6-interactions`) | ✅ search, reports, moderation, audit, admin | |
 | 10a Deployment | `stage/10-deployment` | ✅ nginx, worker, beat, `deploy.sh`, seed, smoke test, README, deployment guide | full stack verified locally; CI green |
@@ -30,6 +30,8 @@ Smoke test (`scripts/smoke_test.sh`, through nginx): steps 1–3 pass (register,
 | `httpx` test transport | `httpx2` | Starlette deprecation in the pinned version |
 | Change-password returns 204 | returns new tokens (200) | It signs out every other session, so the caller needs a fresh session |
 | Dev ports 5432/8000 | 5433/6380/8080 | Clashed with local installs on the dev machine |
+| One branch per stage | Processing task and comments API committed on `stage/8-frontend` | The stage branches are stacked (5 → 6 → 10 → 8) and the security-review fixes (incl. the ffmpeg hardening) exist only at the top; building on `stage/5` would have meant the unhardened wrapper and merge conflicts |
+| Worker scratch in tmpfs `/tmp` (4 GB) | Disk-backed volume `worker-scratch` | tmpfs counts against the worker's 2 GB memory limit: a large upload would be OOM-killed |
 
 ## 1. Roadmap (10 days)
 

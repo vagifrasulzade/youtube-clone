@@ -6,12 +6,14 @@ Hardening applied to EVERY invocation:
   concat file cannot make ffmpeg read other local files or fetch URLs
 - the container format must be in an allowlist before anything is decoded
 - wall-clock timeouts on every process
+- a minimal environment: the worker's DATABASE_URL / S3 keys never reach the decoder
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import threading
@@ -34,6 +36,9 @@ BROWSER_SAFE_PIX_FMT = frozenset({"yuv420p", "yuvj420p"})
 BROWSER_SAFE_AUDIO = frozenset({"aac", "mp3"})
 MAX_WIDTH, MAX_HEIGHT = 1280, 720  # single 720p rendition (docs/video-storage.md § 4)
 MAX_DIMENSION = 8192
+# ffmpeg needs only PATH (and SYSTEMROOT on Windows dev machines); the worker's database
+# and storage credentials stay out of the process that parses untrusted bytes.
+CHILD_ENV = {k: v for k in ("PATH", "SYSTEMROOT", "LANG") if (v := os.environ.get(k))}
 
 
 class MediaError(Exception):
@@ -65,7 +70,7 @@ class ProbeResult:
 def _run(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(  # noqa: S603 - fixed binaries, list args, server paths
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, env=CHILD_ENV
         )
     except subprocess.TimeoutExpired as exc:
         raise MediaError("Processing the file took too long") from exc
@@ -139,7 +144,15 @@ def scale_filter(width: int, height: int) -> str:
     )
 
 
-def playback_command(src: Path, dst: Path, info: ProbeResult) -> list[str]:
+def playback_command(
+    src: Path,
+    dst: Path,
+    info: ProbeResult,
+    *,
+    max_seconds: float | None = None,
+    max_bytes: int | None = None,
+) -> list[str]:
+    """`max_seconds`/`max_bytes` cap what is WRITTEN, whatever the input header claims."""
     cmd = [
         FFMPEG,
         "-hide_banner", "-nostdin", "-y", "-v", "error",
@@ -158,6 +171,10 @@ def playback_command(src: Path, dst: Path, info: ProbeResult) -> list[str]:
             "-vf", scale_filter(info.width, info.height),
             "-c:a", "aac", "-b:a", "128k", "-ac", "2",
         ]  # fmt: skip
+    if max_seconds is not None:
+        cmd += ["-t", f"{max_seconds:.3f}"]
+    if max_bytes is not None:
+        cmd += ["-fs", str(max_bytes)]
     cmd += ["-movflags", "+faststart", "-f", "mp4", str(dst)]  # moov atom first: instant seek
     return cmd
 
@@ -169,13 +186,15 @@ def make_playback(
     *,
     timeout: int,
     on_progress: Callable[[int], None] | None = None,
+    max_seconds: float | None = None,
+    max_bytes: int | None = None,
 ) -> None:
     """Remux or transcode to a progressive MP4, reporting progress (0-99)."""
-    cmd = playback_command(src, dst, info)
+    cmd = playback_command(src, dst, info, max_seconds=max_seconds, max_bytes=max_bytes)
     stderr_path = dst.with_suffix(".stderr.log")
     with stderr_path.open("w") as stderr:
         process = subprocess.Popen(  # noqa: S603 - fixed binary, list args
-            cmd, stdout=subprocess.PIPE, stderr=stderr, text=True
+            cmd, stdout=subprocess.PIPE, stderr=stderr, text=True, env=CHILD_ENV
         )
         if process.stdout is None:  # cannot happen with stdout=PIPE; keeps type checkers happy
             raise MediaError("The video could not be converted")
@@ -199,6 +218,12 @@ def make_playback(
                         last_reported = percent
                         on_progress(percent)
             returncode = process.wait()
+        except BaseException:
+            # Interrupted (Celery's soft time limit, a failing callback): never leave
+            # ffmpeg running on its own once nobody enforces its deadline.
+            process.kill()
+            process.wait()
+            raise
         finally:
             timer.cancel()
     if timed_out.is_set():

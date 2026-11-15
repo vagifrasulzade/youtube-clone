@@ -91,10 +91,62 @@ def test_playback_deadline_fires_even_when_ffmpeg_prints_nothing(
     from app.workers import ffmpeg
 
     stall = [sys.executable, "-c", "import time; time.sleep(30)"]
-    monkeypatch.setattr(ffmpeg, "playback_command", lambda *_args: stall)
+    monkeypatch.setattr(ffmpeg, "playback_command", lambda *_args, **_kwargs: stall)
 
     started = time.monotonic()
     with pytest.raises(ffmpeg.MediaError, match="too long"):
         ffmpeg.make_playback(tmp_path / "in", tmp_path / "out.mp4", _probe(), timeout=1)
 
     assert time.monotonic() - started < 10
+
+
+def test_output_caps_bound_what_ffmpeg_writes() -> None:
+    """Review M1: the input header's duration can lie, so the output itself is capped."""
+    cmd = playback_command(
+        Path("in"), Path("out.mp4"), _probe(), max_seconds=7201.0, max_bytes=2048
+    )
+
+    assert cmd[cmd.index("-t") + 1] == "7201.000"
+    assert cmd[cmd.index("-fs") + 1] == "2048"
+    assert cmd.index("-t") > cmd.index("-i")  # an output option: limits what is written
+
+
+def test_child_processes_get_no_credentials() -> None:
+    """Review L2: DATABASE_URL, S3 keys etc. never reach the process parsing uploads."""
+    from app.workers.ffmpeg import CHILD_ENV
+
+    assert set(CHILD_ENV) <= {"PATH", "SYSTEMROOT", "LANG"}
+
+
+def test_interrupted_playback_kills_ffmpeg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review L1: Celery's soft time limit (or any error) must not leave ffmpeg running."""
+    import subprocess
+    import sys
+
+    from app.workers import ffmpeg
+
+    script = "print('out_time_us=1000000', flush=True); import time; time.sleep(60)"
+    monkeypatch.setattr(
+        ffmpeg, "playback_command", lambda *_a, **_k: [sys.executable, "-c", script]
+    )
+    started: list[subprocess.Popen[str]] = []
+    real_popen = subprocess.Popen
+
+    def recording_popen(*args: object, **kwargs: object) -> subprocess.Popen[str]:
+        assert kwargs["env"] is ffmpeg.CHILD_ENV
+        process = real_popen(*args, **kwargs)  # type: ignore[call-overload]
+        started.append(process)
+        return process
+
+    monkeypatch.setattr(ffmpeg.subprocess, "Popen", recording_popen)
+
+    def interrupt(_percent: int) -> None:
+        raise RuntimeError("soft time limit")
+
+    with pytest.raises(RuntimeError, match="soft time limit"):
+        ffmpeg.make_playback(
+            tmp_path / "in", tmp_path / "out.mp4", _probe(), timeout=60, on_progress=interrupt
+        )
+
+    [process] = started
+    assert process.poll() is not None  # killed and reaped, not left running

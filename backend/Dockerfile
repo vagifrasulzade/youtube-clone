@@ -12,8 +12,11 @@ WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg \
  && rm -rf /var/lib/apt/lists/*
+# /scratch: mount point of the worker's disk-backed scratch volume (owned by app, so a
+# fresh named volume inherits that ownership).
 RUN groupadd --system --gid 10001 app \
- && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
+ && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+ && install -d -o app -g app -m 0700 /scratch
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
