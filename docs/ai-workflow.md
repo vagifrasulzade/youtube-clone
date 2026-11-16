@@ -20,8 +20,9 @@ How this project was built with Claude Code: roles, agent setup, the working loo
 | [`.claude/hooks/ruff_check.py`](../.claude/hooks/ruff_check.py) | Runs `ruff check` on every Python file Claude edits and feeds problems back immediately (it caught dozens of issues during writing) |
 | [`.claude/agents/`](../.claude/agents/) | `security-reviewer`, `code-reviewer`, `test-engineer` with checklists and an evidence-based output format |
 | [`.claude/skills/`](../.claude/skills/) | `stage` (one roadmap stage end-to-end), `verify` (all quality gates, real output only), `commit` (conventional commit of a verified change) |
+| [`.claude/commands/`](../.claude/commands/) | Slash commands for the operational steps: `/smoke` (build the stack and run the end-to-end smoke test), `/review` (code-reviewer, plus security-reviewer for sensitive areas, on a diff or range), `/seed` (load or refresh the demo data), `/package` (refresh the verbatim prompts, run every gate, build the submission zip) |
 
-No MCP servers were configured for this project (there is no `.mcp.json`).
+**No `.mcp.json`, on purpose.** No MCP server was used while building this project. Everything the agent needed was local: git, Docker Compose, pytest, ruff, npm and the API itself through `curl`. The configuration is submitted as it was really used, so an MCP file nobody used would misrepresent the setup. If one is added later (for example a read-only PostgreSQL server for inspecting the dev database), it belongs in `.mcp.json` at the project root.
 
 ## 3. The working loop
 

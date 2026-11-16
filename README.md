@@ -159,7 +159,7 @@ infra/        nginx (SPA + reverse proxy + X-Accel media), MinIO provisioning
 scripts/      Docker test runner, end-to-end smoke test, prompt extraction, submission packager
 docs/         design documentation
 ai/           prompts given to the AI (verbatim) and the raw session transcripts
-CLAUDE.md, .claude/   AI agent rules, subagents, skills, hooks, settings
+CLAUDE.md, .claude/   AI agent rules, subagents, skills, slash commands, hooks, settings
 deploy.sh     one-command deployment
 ```
 
@@ -168,7 +168,7 @@ deploy.sh     one-command deployment
 The project was built with Claude Code as the implementer, while the developer acted as architect and reviewer.
 
 - `CLAUDE.md` holds the project rules: layering, the single access policy and the definition of done.
-- `.claude/` holds the review subagents, the workflow skills and a lint hook.
+- `.claude/` holds the review subagents, the workflow skills (`/stage`, `/verify`, `/commit`), slash commands (`/smoke`, `/review`, `/seed`, `/package`) and a lint hook. There is no `.mcp.json` because no MCP server was used ([why](docs/ai-workflow.md#2-agent-setup-submitted-as-is)).
 - Every stage was planned, implemented with tests, and reviewed by a code-review agent and a security-review agent before it was committed. Their findings were fixed in follow-up commits (for example `d36fc19` for auth and `b650f3b`…`660691c` for stages 5–10), or deferred with the reason recorded in the docs.
 
 The prompts are in `ai/prompts/`. `python scripts/package_submission.py` copies the raw session transcripts into `ai/sessions/` and builds the submission zip, including `.git`.
