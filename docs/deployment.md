@@ -27,7 +27,7 @@ What it does, in order:
      -> nginx       (the only published port)
    ```
 
-4. Loads demo data (`python -m app.cli.seed`) with a randomly generated `DEMO_PASSWORD` (printed at the end, kept in `.env`). Idempotent: it does nothing when the demo admin already exists. In production the seed refuses to run without `DEMO_PASSWORD`.
+4. Loads demo data (`python -m app.cli.seed`) with a randomly generated `DEMO_PASSWORD` (printed at the end, kept in `.env`). There are 15 accounts and 31 distinct generated videos. Safe to re-run: it adds only what is missing and never changes an existing password; `--refresh-media` re-renders existing demo videos. In production the seed refuses to run without `DEMO_PASSWORD`.
 5. Checks `/api/v1/health/ready` through nginx and prints the URLs and demo accounts.
 
 Then run the end-to-end check:
@@ -72,7 +72,7 @@ The internal network uses the fixed subnet `172.30.250.0/24`, with nginx at `172
 ```bash
 docker compose ps                      # status and health
 docker compose logs -f api worker      # JSON logs with request ids
-docker compose exec api python -m app.cli.seed
+docker compose exec api python -m app.cli.seed                    # add missing demo data (add --refresh-media to re-render demo videos)
 docker compose exec api python -m app.cli.create_admin you@example.com   # create a new admin (asks for a password) or promote an existing account
 docker compose exec api python -m app.cli.reset_password you@example.com  # set a new password (asked twice, hidden); signs the account out everywhere
 docker compose down                    # stop (data kept in volumes)

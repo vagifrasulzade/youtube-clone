@@ -26,14 +26,18 @@ After deployment, `scripts/smoke_test.sh` runs *register → login → upload �
 
 ### Demo accounts
 
-Created by `deploy.sh` (seed data):
+Created by `deploy.sh` (seed data). There are 15 accounts and 31 videos with likes, comments, replies, subscriptions, playlists, a private video shared with `viewer`, an unlisted video, a hidden video and an open report.
 
-| Email | Role |
+| Email | Role / channel |
 |---|---|
 | `admin@example.com` | admin |
 | `moderator@example.com` | moderator |
-| `alice@example.com`, `bob@example.com`, `carol@example.com` | creators (user) |
 | `viewer@example.com` | viewer (user) |
+| `alice@`, `bob@`, `carol@`, `dan@`, `elif@`, `farid@`, `gulnar@`, `hasan@`, `ilaha@`, `jamal@`, `kamila@`, `leyla@example.com` | 12 creators (user): cooking, coding, travel, fitness, music, gaming, science, cars, art, football, books, tech |
+
+Every demo video is generated locally by ffmpeg, with no downloads and no third-party media. Each one has its own animated background, colours and length, with its title and channel drawn on it, so no two videos or thumbnails look alike.
+
+Re-running the seed is safe. It only adds what is missing and never changes existing passwords. `docker compose exec api python -m app.cli.seed --refresh-media` also re-renders the files of existing demo videos, keeping their likes, comments and views.
 
 Their password is **generated randomly** by `deploy.sh`. It is printed at the end of the run and stored in `.env` as `DEMO_PASSWORD`. For local development without `deploy.sh` it defaults to `demo-password-123`.
 
