@@ -24,32 +24,45 @@ After deployment, `scripts/smoke_test.sh` runs *register → login → upload �
 
 ## Accounts and roles
 
-**Demo accounts:**
+### Demo accounts
 
-- `admin@example.com` (admin)
-- `moderator@example.com` (moderator)
-- `alice@example.com`, `bob@example.com`, `carol@example.com` (creators)
-- `viewer@example.com` (viewer)
+Created by `deploy.sh` (seed data):
 
-The demo password is **generated randomly** by `deploy.sh`. It is printed at the end of the run and stored in `.env` as `DEMO_PASSWORD`. For local development without `deploy.sh` it defaults to `demo-password-123`.
+| Email | Role |
+|---|---|
+| `admin@example.com` | admin |
+| `moderator@example.com` | moderator |
+| `alice@example.com`, `bob@example.com`, `carol@example.com` | creators (user) |
+| `viewer@example.com` | viewer (user) |
 
-Anyone can register at `/register` (email, password of 8+ characters, channel name and a handle such as `alice`; a leading `@` is accepted). New accounts get the `user` role.
+Their password is **generated randomly** by `deploy.sh`. It is printed at the end of the run and stored in `.env` as `DEMO_PASSWORD`. For local development without `deploy.sh` it defaults to `demo-password-123`.
 
-**Admins are never created through the web API**, so a stolen session cannot mint new admins. Promote an existing account from the server shell:
+> Changing `DEMO_PASSWORD` in `.env` later does **not** change the accounts: the seed stores each password once. Use `reset_password` (below) instead.
 
-```bash
-docker compose exec api python -m app.cli.create_admin someone@example.com
-```
+Anyone can also register at `/register`: email, a password of 8+ characters, a channel name and a handle such as `alice` (a leading `@` is accepted). New accounts get the `user` role.
 
-Admins can then make other users moderators in the admin panel.
+### Admin commands (email + password)
 
-**Forgot a password?** This includes the demo accounts after `DEMO_PASSWORD` was changed in `.env`: the seed stores the password only once, so editing `.env` later does not change it. Set a new password from the server shell:
+**Admins are never created through the web API**, so a stolen session cannot create new admins. Run these from the project folder, where `docker-compose.yml` is, while the stack is up:
 
-```bash
-docker compose exec api python -m app.cli.reset_password admin@example.com
-```
+| Task | Command |
+|---|---|
+| Create a **new** admin account (asks for a password) | `docker compose exec api python -m app.cli.create_admin admin@yourmail.com` |
+| The same, with a chosen handle | `docker compose exec api python -m app.cli.create_admin admin@yourmail.com siteadmin` |
+| Make an **existing** account admin (password unchanged) | `docker compose exec api python -m app.cli.create_admin you@yourmail.com` |
+| Set a **new password** for any account | `docker compose exec api python -m app.cli.reset_password admin@example.com` |
 
-It asks for the new password twice without echo (never as an argument, so it stays out of the shell history) and signs that account out everywhere. Every permission is checked by the API: the frontend only hides links a role cannot use.
+How they behave:
+
+- **Passwords are typed when asked, never in the command**, so they stay out of the shell history. You are asked twice; nothing is shown while you type.
+  - Do not add `-T`: the command needs a terminal to ask.
+  - For scripts, pipe the password on stdin instead: `docker compose exec -T api ... < password.txt`.
+- **The registration rules apply:** a valid email, 8–128 characters, and not the same as the email or the handle.
+- **Handle:** for a new account it defaults to the part of the email before `@`. A number is added if that handle is taken (`admin` → `admin2`).
+- **Sessions:** `reset_password` signs that account out everywhere.
+- **Then sign in** at `/login` with the email and password. **Admin** and **Moderation** appear in the account menu and the sidebar. If you were already signed in, reload the page.
+
+Admins can make other users moderators (and ban/unban) in the admin panel at `/admin`. Every permission is checked by the API: the frontend only hides links a role cannot use.
 
 ## Screens
 

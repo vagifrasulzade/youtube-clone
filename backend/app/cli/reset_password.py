@@ -14,33 +14,18 @@ keep the password they were seeded with even if DEMO_PASSWORD changes later.
 
 from __future__ import annotations
 
-import getpass
 import sys
-from collections.abc import Callable
 
 from sqlalchemy import select
 
+from app.cli.prompt import PasswordReader, read_new_password
 from app.core.errors import BadRequestError
 from app.db.session import get_sessionmaker
 from app.models import User
 from app.services import auth
 
-PasswordReader = Callable[[], str | None]
 
-
-def read_password() -> str | None:
-    """Interactive: ask twice without echo. Piped: the first line of stdin."""
-    if not sys.stdin.isatty():
-        line = sys.stdin.readline()
-        return line.rstrip("\r\n") or None
-    first = getpass.getpass("New password: ")
-    if first != getpass.getpass("Repeat the new password: "):
-        print("The passwords do not match.", file=sys.stderr)
-        return None
-    return first
-
-
-def main(argv: list[str], reader: PasswordReader = read_password) -> int:
+def main(argv: list[str], reader: PasswordReader = read_new_password) -> int:
     if len(argv) != 1:
         print("usage: python -m app.cli.reset_password <email>", file=sys.stderr)
         return 2

@@ -199,10 +199,15 @@ def test_create_admin_cli_promotes_an_existing_account(
     target = create_user(db_session, email="future-admin@example.com")
     monkeypatch.setattr(create_admin, "get_sessionmaker", lambda: lambda: nullcontext(db_session))
 
-    assert create_admin.main(["Future-Admin@example.com"]) == 0
+    def no_prompt() -> str:
+        raise AssertionError("an existing account must not be asked for a password")
+
+    assert create_admin.main(["Future-Admin@example.com"], reader=no_prompt) == 0
     db_session.refresh(target)
     assert target.role.name == RoleName.ADMIN
-    assert create_admin.main(["nobody@example.com"]) == 1
+    # A new email without a password (cancelled / mismatched entries): nothing is created.
+    assert create_admin.main(["nobody@example.com"], reader=lambda: None) == 1
+    assert db_session.scalar(select(User).where(User.email == "nobody@example.com")) is None
 
 
 def test_audit_log_never_stores_email_addresses(
@@ -217,3 +222,52 @@ def test_audit_log_never_stores_email_addresses(
 
     assert details
     assert all("@" not in d for d in details)
+
+
+def test_create_admin_cli_creates_a_new_admin_with_a_password(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+
+    from app.cli import create_admin
+    from app.core.security import verify_password
+
+    monkeypatch.setattr(create_admin, "get_sessionmaker", lambda: lambda: nullcontext(db_session))
+    create_user(db_session, handle="newboss")  # the default handle is taken: a number is added
+
+    assert create_admin.main(["NewBoss@Example.com"], reader=lambda: "strong-pass-123") == 0
+
+    user = db_session.scalar(select(User).where(User.email == "newboss@example.com"))
+    assert user is not None
+    assert user.role.name == RoleName.ADMIN
+    assert user.channel.handle == "newboss2"
+    assert verify_password(user.password_hash, "strong-pass-123")
+
+
+def test_create_admin_cli_accepts_a_handle_and_enforces_the_rules(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+
+    from app.cli import create_admin
+
+    monkeypatch.setattr(create_admin, "get_sessionmaker", lambda: lambda: nullcontext(db_session))
+
+    assert (
+        create_admin.main(["boss@example.com", "@TheBoss"], reader=lambda: "strong-pass-123") == 0
+    )
+    boss = db_session.scalar(select(User).where(User.email == "boss@example.com"))
+    assert boss is not None
+    assert boss.channel.handle == "theboss"
+
+    for argv, password in [
+        (["weak@example.com"], "short"),  # under 8 characters
+        (["same@example.com"], "same@example.com"),  # equals the email
+        (["bad@example.com", "no spaces!"], "strong-pass-123"),  # invalid handle
+        (["not-an-email"], "strong-pass-123"),
+        (["taken@example.com", "theboss"], "strong-pass-123"),  # handle already used
+    ]:
+        assert create_admin.main(argv, reader=lambda p=password: p) == 1, argv
+        email = argv[0]
+        assert db_session.scalar(select(User).where(User.email == email)) is None
+    assert create_admin.main([]) == 2

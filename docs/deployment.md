@@ -73,7 +73,7 @@ The internal network uses the fixed subnet `172.30.250.0/24`, with nginx at `172
 docker compose ps                      # status and health
 docker compose logs -f api worker      # JSON logs with request ids
 docker compose exec api python -m app.cli.seed
-docker compose exec api python -m app.cli.create_admin you@example.com   # promote an account to admin
+docker compose exec api python -m app.cli.create_admin you@example.com   # create a new admin (asks for a password) or promote an existing account
 docker compose exec api python -m app.cli.reset_password you@example.com  # set a new password (asked twice, hidden); signs the account out everywhere
 docker compose down                    # stop (data kept in volumes)
 docker compose down -v                 # stop AND delete all data

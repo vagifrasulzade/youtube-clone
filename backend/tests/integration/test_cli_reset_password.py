@@ -72,6 +72,9 @@ def test_unknown_account_and_bad_usage(target: User) -> None:
 def test_piped_stdin_is_read_as_one_line(monkeypatch: pytest.MonkeyPatch) -> None:
     import io
 
-    monkeypatch.setattr("sys.stdin", io.StringIO(f"{NEW}\r\nignored\n"))
+    # As Windows PowerShell pipes it: a BOM first and a CRLF line ending.
+    monkeypatch.setattr("sys.stdin", io.StringIO(f"﻿{NEW}\r\nignored\n"))
 
-    assert reset_password.read_password() == NEW
+    from app.cli.prompt import read_new_password
+
+    assert read_new_password() == NEW
