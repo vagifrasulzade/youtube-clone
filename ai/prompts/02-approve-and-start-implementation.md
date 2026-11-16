@@ -647,4 +647,3 @@ Wait for my review before implementing Stage 2.
 Remember: The goal is a working, testable, secure and deployable application, not just a visually attractive demo.
 </pasted_content id="030a">
 
-1ci backend baslayir  sonra 2ci frontend fso , claude lazimdir proyketinde basla
