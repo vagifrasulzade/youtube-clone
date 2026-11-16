@@ -4,16 +4,17 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { describeError } from '../api/http'
 import { useAuth } from '../auth/context'
 import { safeNext } from '../auth/redirect'
-import { EyeIcon, EyeOffIcon, PlayBadge } from '../components/icons'
+import { APP_NAME } from '../brand'
+import { EyeIcon, EyeOffIcon } from '../components/icons'
+import { Logo } from '../components/ui/Logo'
 import { usePageTitle } from '../hooks/usePageTitle'
 
 function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f0f4f9] px-4">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-sm">
-        <Link to="/" className="mb-6 flex items-center gap-1">
-          <PlayBadge size={24} />
-          <span className="text-xl font-bold tracking-tighter">TubeClone</span>
+        <Link to="/" aria-label="Home" className="mb-6 flex items-center">
+          <Logo size={24} />
         </Link>
         <h1 className="text-3xl">{title}</h1>
         <p className="mt-2 mb-6 text-yt-muted">{subtitle}</p>
@@ -113,7 +114,7 @@ export function LoginPage() {
   }
 
   return (
-    <Card title="Sign in" subtitle="to continue to TubeClone">
+    <Card title="Sign in" subtitle={`to continue to ${APP_NAME}`}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Email" name="email" type="email" value={email} onChange={setEmail} autoComplete="email" />
         <Field

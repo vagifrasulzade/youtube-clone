@@ -20,8 +20,10 @@ How this project was built with Claude Code: roles, agent setup, the working loo
 | [`.claude/hooks/ruff_check.py`](../.claude/hooks/ruff_check.py) | Runs `ruff check` on every Python file Claude edits and feeds problems back immediately (it caught dozens of issues during writing) |
 | [`.claude/agents/`](../.claude/agents/) | `security-reviewer`, `code-reviewer`, `test-engineer` with checklists and an evidence-based output format |
 | [`.claude/skills/`](../.claude/skills/) | `stage` (one roadmap stage end-to-end), `verify` (all quality gates, real output only), `commit` (conventional commit of a verified change) |
+| [`.claude/commands/`](../.claude/commands/) | Slash commands for the operational steps: `/smoke` (build the stack and run the end-to-end smoke test), `/review` (code-reviewer, plus security-reviewer for sensitive areas, on a diff or range), `/seed` (load or refresh the demo data), `/package` (refresh the verbatim prompts, run every gate, build the submission zip) |
+| [`.mcp.json`](../.mcp.json) | **Playwright MCP** (`@playwright/mcp`), so the agent can drive a real browser against the running app: sign in, upload, Studio, admin. It closes the gap that the UI was checked through tests, builds and the API smoke test, but not by clicking through it. Locked down: version pinned (0.0.84, more than two weeks old when added, not `@latest`), `--isolated` (the browser profile is never written to disk), and `--allowed-origins http://127.0.0.1;http://localhost`, so it can only open this app and not arbitrary sites. No secrets. Claude Code asks before it starts a project MCP server. The browser comes from Playwright (`npx playwright install chromium` if none is installed). On native Windows, Claude Code may need the command wrapped as `cmd /c npx …`. |
 
-No MCP servers were configured for this project (there is no `.mcp.json`).
+Honest note: the MCP server was added at the end of the project. During the build no MCP server was used; everything the agent needed was local (git, Docker Compose, pytest, ruff, npm and the API through `curl`).
 
 ## 3. The working loop
 
