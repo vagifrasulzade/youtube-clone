@@ -55,11 +55,15 @@ def test_moderation_examples_and_playlists_reference_real_videos() -> None:
         assert set(playlist_titles) <= titles
 
 
-def test_overlay_quotes_text_files_and_refuses_odd_paths(tmp_path) -> None:
-    graph = seed.overlay(tmp_path / "t.txt", tmp_path / "c.txt")
-    assert f"textfile='{tmp_path / 't.txt'}'" in graph
-    with pytest.raises(ValueError, match="quote"):
-        seed.overlay(tmp_path / "it's.txt", tmp_path / "c.txt")
+def test_overlay_quotes_text_files_and_refuses_filter_metacharacters() -> None:
+    from pathlib import PurePosixPath
+
+    title, channel = PurePosixPath("/work/t.txt"), PurePosixPath("/work/c.txt")
+    graph = seed.overlay(title, channel)  # type: ignore[arg-type]
+    assert "textfile='/work/t.txt'" in graph
+    for bad in ("/work/it's.txt", "C:/work/t.txt", r"/work/a\b.txt"):
+        with pytest.raises(ValueError, match="unsupported characters"):
+            seed.overlay(PurePosixPath(bad), channel)  # type: ignore[arg-type]
 
 
 def test_unknown_arguments_are_rejected() -> None:

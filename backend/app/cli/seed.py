@@ -10,8 +10,14 @@ it, so no two demo videos (or their thumbnails) look the same. The files are sto
 MinIO exactly where processed uploads live.
 
 Safe to run again. It only adds what is missing (new demo accounts and videos) and never
-changes an existing account's password or anyone's data. `--refresh-media` re-renders the
-files of demo videos that already exist (likes, comments and views are kept).
+changes an existing account's password or anyone's data. Because it adds what is missing,
+a demo video or account deleted or renamed in the app comes back on the next run, and
+deploy.sh seeds by default (`./deploy.sh --no-seed` skips it). `--refresh-media`
+re-renders the files of seeded demo videos (never real uploads) and keeps their likes,
+comments, views and chosen thumbnail.
+
+Each video is rendered and uploaded, then committed on its own. A failure part-way keeps
+everything before it, removes the failed video's objects, and the next run continues.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -48,7 +54,7 @@ from app.models.enums import ROLE_IDS, ReportReason, RoleName, VideoStatus, Visi
 from app.storage import keys, s3
 from app.workers import ffmpeg
 
-logger = logging.getLogger("seed")
+logger = logging.getLogger(__name__)
 
 # Local development only. Deployments get a random DEMO_PASSWORD from deploy.sh, and the
 # seed refuses to run in production without one (security review H1).
@@ -276,11 +282,22 @@ def _font(name: str) -> str:
     return f"fontfile={path}" if path.exists() else "font=Sans"  # fontconfig fallback
 
 
+# A quote ends the quoted value; a colon or backslash would still be parsed after ffmpeg
+# strips one level of quoting. They only occur in Windows paths, and the seed runs in the
+# Linux container.
+_UNSAFE_IN_FILTER = frozenset("'\\:")
+THUMBNAIL_POINTS = (("auto_1", 0.25), ("auto_2", 0.5), ("auto_3", 0.75))
+
+
 def overlay(title_file: Path, channel_file: Path) -> str:
-    """Title in the middle, channel name in a bar at the bottom (as a thumbnail reads)."""
+    """Title in the middle, channel name in a bar at the bottom (as a thumbnail reads).
+
+    The text is read from files, so titles need no escaping; the file paths themselves are
+    server-made and refused if they contain filtergraph metacharacters.
+    """
     for path in (title_file, channel_file):
-        if "'" in str(path):  # server-made temp paths; never true, but keep the quoting sound
-            raise ValueError("unexpected quote in a temporary path")
+        if _UNSAFE_IN_FILTER & set(str(path)):
+            raise ValueError(f"unsupported characters for an ffmpeg filter path: {path}")
     return (
         "drawbox=x=0:y=ih-90:w=iw:h=90:color=black@0.55:t=fill,"
         f"drawtext={_font('DejaVuSans-Bold.ttf')}:textfile='{title_file}':fontsize=64"
@@ -292,7 +309,11 @@ def overlay(title_file: Path, channel_file: Path) -> str:
 
 
 def render_clip(path: Path, index: int, title: str, channel: str) -> int:
-    """Render one demo clip (H.264/AAC MP4). Returns its duration in seconds."""
+    """Render one demo clip (H.264/AAC MP4). Returns its duration in seconds.
+
+    Inputs are lavfi graphs built in this module (no files or URLs are opened). ffmpeg gets
+    the same minimal environment as the processing worker, so no credentials reach it.
+    """
     seconds = clip_seconds(index)
     title_file = path.with_suffix(".title.txt")
     channel_file = path.with_suffix(".channel.txt")
@@ -304,38 +325,73 @@ def render_clip(path: Path, index: int, title: str, channel: str) -> int:
         "-f", "lavfi", "-i", background(index),
         "-f", "lavfi", "-i", f"sine=frequency={180 + index * 37 % 520}:sample_rate=44100",
         "-t", str(seconds),
-        "-vf", overlay(title_file, channel_file),
+        # Some sources (zone plates) are full range: always publish limited-range yuv420p.
+        "-vf", f"{overlay(title_file, channel_file)},scale=out_range=tv,format=yuv420p",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "96k", "-shortest",
         "-movflags", "+faststart",
         str(path),
     ]  # fmt: skip
-    subprocess.run(cmd, check=True, timeout=300, capture_output=True)  # noqa: S603
+    result = subprocess.run(  # noqa: S603 - fixed binary, list args, graphs built here
+        cmd, capture_output=True, text=True, timeout=300, check=False, env=ffmpeg.CHILD_ENV
+    )
+    if result.returncode != 0:
+        logger.error("ffmpeg could not render demo clip %d: %s", index, result.stderr[-1500:])
+        raise RuntimeError(f"rendering demo clip {index} failed")
     return seconds
 
 
-def _store_media(video: Video, workdir: Path, index: int, channel_name: str) -> None:
+@dataclass(frozen=True)
+class Media:
+    seconds: int
+    size: int
+
+
+def _render_and_upload(
+    video_id: str, title: str, channel_name: str, index: int, workdir: Path
+) -> Media:
+    """Render the clip and its thumbnails locally first, then upload: a render failure
+    uploads nothing, so storage and the database cannot disagree because of it."""
     settings = get_settings()
-    clip = workdir / f"{video.id}.mp4"
-    seconds = render_clip(clip, index, video.title, channel_name)
+    clip = workdir / f"{video_id}.mp4"
+    seconds = render_clip(clip, index, title, channel_name)
+    frames: dict[str, Path] = {}
+    for choice, fraction in THUMBNAIL_POINTS:
+        frames[choice] = workdir / f"{video_id}-{choice}.jpg"
+        ffmpeg.extract_frame(clip, frames[choice], seconds * fraction)
     s3.upload_file(
-        settings.media_bucket, keys.video_playback(video.id), str(clip), content_type="video/mp4"
+        settings.media_bucket, keys.video_playback(video_id), str(clip), content_type="video/mp4"
     )
-    for choice, fraction in (("auto_1", 0.25), ("auto_2", 0.5), ("auto_3", 0.75)):
-        frame = workdir / f"{video.id}-{choice}.jpg"
-        ffmpeg.extract_frame(clip, frame, seconds * fraction)
+    for choice, frame in frames.items():
         s3.upload_file(
             settings.media_bucket,
-            keys.video_thumbnail(video.id, choice),
+            keys.video_thumbnail(video_id, choice),
             str(frame),
             content_type="image/jpeg",
         )
+    return Media(seconds=seconds, size=clip.stat().st_size)
+
+
+def _apply_media(video: Video, media: Media) -> None:
     video.playback_key = keys.video_playback(video.id)
-    video.thumbnail_key = keys.video_thumbnail(video.id, "auto_2")
-    video.playback_size_bytes = clip.stat().st_size
-    video.duration_seconds = seconds
+    # A thumbnail chosen in Studio (auto_1/2/3 or custom) survives a re-render.
+    video.thumbnail_key = video.thumbnail_key or keys.video_thumbnail(video.id, "auto_2")
+    video.playback_size_bytes = media.size
+    video.duration_seconds = media.seconds
     video.width, video.height = 1280, 720
     video.updated_at = datetime.now(UTC)  # new ?v= so browsers fetch the new thumbnail
+
+
+def _discard_objects(video_id: str) -> None:
+    try:
+        s3.delete_prefix(get_settings().media_bucket, keys.video_prefix(video_id))
+    except Exception:  # best effort; the error that stopped the seed is what matters
+        logger.exception("Could not remove the objects of failed demo video %s", video_id)
+
+
+def _is_seeded(video: Video) -> bool:
+    """Demo videos have no raw upload; a real upload by a demo account is never touched."""
+    return video.source_key is None and video.status == VideoStatus.READY
 
 
 # --- seeding -----------------------------------------------------------------------------
@@ -379,9 +435,11 @@ def _engage(
         video.like_count += value > 0
         video.dislike_count += value < 0
     published = video.published_at or now
+    span = (now - published).total_seconds()
     creator = next(u for u in users if u.channel.id == video.channel_id)
     for author in rng.sample(users, k=rng.randint(1, 4)):
-        at = min(now, published + timedelta(hours=rng.randint(1, 96)))
+        # Between publishing and now; a reply lands between its parent and now.
+        at = published + timedelta(seconds=span * rng.uniform(0.05, 0.7))
         comment = Comment(
             video_id=video.id, author_id=author.id, body=rng.choice(COMMENTS), created_at=at
         )
@@ -395,7 +453,7 @@ def _engage(
                     author_id=creator.id,
                     parent_id=comment.id,
                     body=rng.choice(REPLIES),
-                    created_at=min(now, at + timedelta(hours=rng.randint(1, 12))),
+                    created_at=at + (now - at) * rng.uniform(0.1, 0.9),
                 )
             )
             comment.reply_count += 1
@@ -412,9 +470,15 @@ def _subscribe(db: Session, users: dict[str, User], created: set[str], rng: rand
             if subscriber_handle not in created and creator_handle not in created:
                 continue
             if rng.random() < 0.55:
-                channel = users[creator_handle].channel
-                db.add(Subscription(subscriber_id=subscriber.id, channel_id=channel.id))
-                channel.subscriber_count += 1
+                channel_id = users[creator_handle].channel.id
+                db.add(Subscription(subscriber_id=subscriber.id, channel_id=channel_id))
+                # Atomic: channels that already exist may be followed through the API
+                # while the seed runs (CLAUDE.md rule 5).
+                db.execute(
+                    update(Channel)
+                    .where(Channel.id == channel_id)
+                    .values(subscriber_count=Channel.subscriber_count + 1)
+                )
 
 
 def _moderation_and_sharing(
@@ -465,22 +529,28 @@ def seed(db: Session, password: str, *, refresh_media: bool = False) -> SeedResu
     now = datetime.now(UTC)
     result = SeedResult()
     users, created = _ensure_users(db, password)
+    db.commit()
     result.users = len(created)
     everyone = list(users.values())
 
     videos: dict[str, Video] = {}
     with tempfile.TemporaryDirectory() as tmp:
+        workdir = Path(tmp)
         for index, demo in enumerate(VIDEOS):
             channel = users[demo.handle].channel
-            video = db.scalar(
+            existing = db.scalar(
                 select(Video).where(Video.channel_id == channel.id, Video.title == demo.title)
             )
-            if video is not None:
-                if refresh_media:
-                    _store_media(video, Path(tmp), index, channel.name)
+            if existing is not None:
+                videos[demo.title] = existing
+                if refresh_media and _is_seeded(existing):
+                    media = _render_and_upload(
+                        existing.id, demo.title, channel.name, index, workdir
+                    )
+                    _apply_media(existing, media)
+                    db.commit()  # files and metadata agree from here on
                     result.refreshed += 1
-                    logger.info("Re-rendered video %s: %s", video.id, demo.title)
-                videos[demo.title] = video
+                    logger.info("Re-rendered video %s: %s", existing.id, demo.title)
                 continue
             video = Video(
                 channel_id=channel.id,
@@ -493,12 +563,20 @@ def seed(db: Session, password: str, *, refresh_media: bool = False) -> SeedResu
             )
             db.add(video)
             db.flush()
-            _store_media(video, Path(tmp), index, channel.name)
+            video_id = video.id
+            try:
+                media = _render_and_upload(video_id, demo.title, channel.name, index, workdir)
+            except Exception:
+                db.rollback()  # earlier videos are already committed
+                _discard_objects(video_id)
+                raise
+            _apply_media(video, media)
             _engage(db, video, everyone, rng, now)
             _moderation_and_sharing(db, demo, video, users, now)
+            db.commit()
             videos[demo.title] = video
             result.videos += 1
-            logger.info("Seeded video %s: %s", video.id, demo.title)
+            logger.info("Seeded video %s: %s", video_id, demo.title)
 
     _subscribe(db, users, created, rng)
     _ensure_playlists(db, users, videos)
