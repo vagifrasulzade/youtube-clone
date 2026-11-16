@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 
-import { CreateIcon, MenuIcon, PlayBadge } from '../icons'
+import { CreateIcon, MenuIcon } from '../icons'
+import { Logo } from '../ui/Logo'
 import { SearchBox } from './SearchBox'
 import { UserMenu } from './UserMenu'
 
@@ -20,9 +21,8 @@ export function Header({ onToggleSidebar }: HeaderProps) {
         >
           <MenuIcon />
         </button>
-        <Link to="/" aria-label="Home" className="flex items-center gap-1">
-          <PlayBadge size={20} />
-          <span className="text-xl font-bold tracking-tighter">TubeClone</span>
+        <Link to="/" aria-label="Home" className="flex items-center">
+          <Logo size={20} />
         </Link>
       </div>
 

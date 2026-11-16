@@ -72,7 +72,7 @@ export function UserMenu() {
             <ChannelIcon /> Your channel
           </Link>
           <Link role="menuitem" to="/studio" onClick={go} className={item}>
-            <ChannelIcon /> TubeClone Studio
+            <ChannelIcon /> Studio
           </Link>
           {hasRole(user, 'moderator') && (
             <Link role="menuitem" to="/moderation" onClick={go} className={item}>

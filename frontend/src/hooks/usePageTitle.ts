@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 
-const APP = 'TubeClone'
+import { APP_NAME } from '../brand'
 
-/** Browser tab title like YouTube's ("<page> - TubeClone"); plain app name when empty. */
+/** Browser tab title like YouTube's ("<page> - YouTube Clone"); plain app name when empty. */
 export function usePageTitle(title: string | null | undefined): void {
   useEffect(() => {
-    document.title = title ? `${title} - ${APP}` : APP
+    document.title = title ? `${title} - ${APP_NAME}` : APP_NAME
   }, [title])
 }

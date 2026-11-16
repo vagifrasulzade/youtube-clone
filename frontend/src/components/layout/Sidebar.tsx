@@ -68,7 +68,9 @@ export function Sidebar() {
       <Section items={MAIN} />
       <Section title="You" items={YOU} />
       {staff.length > 0 && <Section items={staff} />}
-      <p className="px-3 py-4 text-xs text-yt-muted">TubeClone, a YouTube-style demo</p>
+      <p className="px-3 py-4 text-xs text-yt-muted">
+        YouTube Clone: a demo project, not affiliated with YouTube or Google.
+      </p>
     </nav>
   )
 }
